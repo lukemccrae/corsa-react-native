@@ -1,6 +1,7 @@
 import { FC, useCallback, useEffect, useRef, useState } from "react"
 import { Linking, Platform, StyleSheet, TextStyle, View, ViewStyle } from "react-native"
 import * as Location from "expo-location"
+import { useRouter } from "expo-router"
 import MapView, { MapViewProps, Region } from "react-native-maps"
 
 import { Button } from "@/components/Button"
@@ -13,7 +14,8 @@ const DEFAULT_DELTA = { latitudeDelta: 0.01, longitudeDelta: 0.01 }
 
 export const MapScreen: FC = function MapScreen() {
   const { themed } = useAppTheme()
-  const { signOut } = useAuth()
+  const { user, signOut } = useAuth()
+  const router = useRouter()
   const mapRef = useRef<MapView>(null)
 
   const [region, setRegion] = useState<Region | null>(null)
@@ -85,12 +87,21 @@ export const MapScreen: FC = function MapScreen() {
           style={themed($mapButton)}
           disabled={permissionStatus !== Location.PermissionStatus.GRANTED}
         />
-        <Button
-          tx="mapScreen:signOut"
-          preset="default"
-          onPress={signOut}
-          style={themed($mapButton)}
-        />
+        {user ? (
+          <Button
+            tx="mapScreen:signOut"
+            preset="default"
+            onPress={signOut}
+            style={themed($mapButton)}
+          />
+        ) : (
+          <Button
+            tx="mapScreen:signIn"
+            preset="default"
+            onPress={() => router.push("/(auth)/sign-in")}
+            style={themed($mapButton)}
+          />
+        )}
       </View>
 
       {/* Permission denied banner */}

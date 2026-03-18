@@ -18,17 +18,25 @@ cp .env.example .env
 Then edit `.env`:
 
 ```
-NEXT_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
-NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
+EXPO_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key
+EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+EXPO_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
+EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
+EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
+EXPO_PUBLIC_FIREBASE_APP_ID=your_app_id
+
+# Google Sign-In (Sign in with Google via Firebase Auth)
+EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=your_google_web_client_id.apps.googleusercontent.com
+# Optional – improves the native sign-in experience on EAS / bare builds:
+EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=your_google_ios_client_id.apps.googleusercontent.com
+EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=your_google_android_client_id.apps.googleusercontent.com
 ```
 
-These are read at build time via `app.config.ts` and exposed through `expo-constants`. You can find the values in your [Firebase console](https://console.firebase.google.com/) under **Project Settings → Your apps → SDK setup and configuration**.
+These are read at build time via `app.config.ts` and exposed through `expo-constants`. You can find the Firebase values in your [Firebase console](https://console.firebase.google.com/) under **Project Settings → Your apps → SDK setup and configuration**.
 
-> **Note**: Enable **Email/Password** sign-in in the Firebase console under **Authentication → Sign-in method**.
+> **Note**: Enable **Email/Password** and **Google** sign-in in the Firebase console under **Authentication → Sign-in method**. For Google sign-in, the **Web client ID** is listed on that same page once Google is enabled.
+
+> **Expo Go vs native builds**: Google sign-in via `expo-auth-session` works in Expo Go using the web OAuth flow (only `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` is required). For EAS / bare workflow builds, supply the iOS and Android client IDs as well so the native Google SDK is used instead.
 
 ## Getting Started
 

@@ -53,8 +53,7 @@ module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
       [
         "expo-location",
         {
-          locationWhenInUsePermission:
-            "$(PRODUCT_NAME) uses your location to show it on the map.",
+          locationWhenInUsePermission: "$(PRODUCT_NAME) uses your location to show it on the map.",
         },
       ],
     ],
