@@ -62,7 +62,8 @@
       }
     ],
     "expo-build-properties",
-    "expo-router"
+    "expo-router",
+    "@maplibre/maplibre-react-native"
   ],
   "experiments": {
     "tsconfigPaths": true,
