@@ -22,12 +22,19 @@
       "backgroundImage": "./assets/images/app-icon-android-adaptive-background.png"
     },
     "allowBackup": false,
-    "edgeToEdgeEnabled": true
+    "edgeToEdgeEnabled": true,
+    "permissions": [
+      "ACCESS_FINE_LOCATION",
+      "ACCESS_COARSE_LOCATION"
+    ]
   },
   "ios": {
     "icon": "./assets/images/app-icon-ios.png",
     "supportsTablet": true,
-    "bundleIdentifier": "com.corsanative"
+    "bundleIdentifier": "com.corsanative",
+    "infoPlist": {
+      "NSLocationWhenInUseUsageDescription": "$(PRODUCT_NAME) uses your location to show it on the map."
+    }
   },
   "web": {
     "favicon": "./assets/images/app-icon-web-favicon.png",

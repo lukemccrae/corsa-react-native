@@ -90,3 +90,7 @@ web-build/
 # Dependency Graph Visualizations
 app-dependency-graph.svg
 app-dependency-graph.png
+# Local environment variables
+.env
+.env.local
+package-lock.json

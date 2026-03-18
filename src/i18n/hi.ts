@@ -25,6 +25,29 @@ const hi: Translations = {
       button: "चलो फिर से कोशिश करते हैं",
     },
   },
+  signInScreen: {
+    title: "Sign In",
+    emailLabel: "Email",
+    emailPlaceholder: "you@example.com",
+    passwordLabel: "Password",
+    passwordPlaceholder: "••••••••",
+    signInButton: "Sign In",
+    signUpButton: "Create Account",
+    noAccount: "Don't have an account?",
+    haveAccount: "Already have an account?",
+    errorInvalidCredentials: "Invalid email or password.",
+    errorGeneric: "Sign in failed. Please try again.",
+  },
+  mapScreen: {
+    centerOnMe: "Center on me",
+    signOut: "Sign out",
+    locationPermissionDenied: "Location access denied.",
+    locationPermissionMessage:
+      "Enable location in Settings to see your position on the map.",
+    openSettings: "Open Settings",
+    retry: "Retry",
+    locationError: "Could not get your location. Please try again.",
+  },
 }
 
 export default hi

@@ -7,6 +7,29 @@ This is the boilerplate that [Infinite Red](https://infinite.red) uses as a way 
 - [Quick start documentation](https://github.com/infinitered/ignite/blob/master/docs/boilerplate/Boilerplate.md)
 - [Full documentation](https://github.com/infinitered/ignite/blob/master/docs/README.md)
 
+## Environment Setup
+
+This app requires Firebase credentials. Copy `.env.example` to `.env` and fill in your Firebase project values:
+
+```bash
+cp .env.example .env
+```
+
+Then edit `.env`:
+
+```
+NEXT_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
+NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
+```
+
+These are read at build time via `app.config.ts` and exposed through `expo-constants`. You can find the values in your [Firebase console](https://console.firebase.google.com/) under **Project Settings → Your apps → SDK setup and configuration**.
+
+> **Note**: Enable **Email/Password** sign-in in the Firebase console under **Authentication → Sign-in method**.
+
 ## Getting Started
 
 ```bash

@@ -5,6 +5,7 @@ import { KeyboardProvider } from "react-native-keyboard-controller"
 import { initialWindowMetrics, SafeAreaProvider } from "react-native-safe-area-context"
 
 import { initI18n } from "@/i18n"
+import { AuthProvider } from "@/providers/AuthProvider"
 import { ThemeProvider } from "@/theme/context"
 import { customFontsToLoad } from "@/theme/typography"
 import { loadDateFnsLocale } from "@/utils/formatDate"
@@ -47,9 +48,11 @@ export default function Root() {
   return (
     <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       <ThemeProvider>
-        <KeyboardProvider>
-          <Slot />
-        </KeyboardProvider>
+        <AuthProvider>
+          <KeyboardProvider>
+            <Slot />
+          </KeyboardProvider>
+        </AuthProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   )
