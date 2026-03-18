@@ -5,21 +5,28 @@
  *   const { signInWithGoogle, request } = useGoogleSignIn()
  *   <Button onPress={signInWithGoogle} disabled={!request} />
  *
- * Build notes:
- *   - In Expo Go only the webClientId is used (no native Google SDK).
- *   - For native builds (EAS / bare workflow) supply iosClientId / androidClientId
- *     in your .env so Google uses the correct platform-specific OAuth flow.
- *   - Do NOT override redirectUri – expo-auth-session/providers/google computes the
- *     correct platform redirect URI automatically:
- *       Android: com.googleusercontent.apps.{androidClientId}://oauth2redirect/android
- *       iOS:     reversed iOS client-ID scheme
- *     Passing a custom scheme like "corsanative://" causes Error 400: invalid_request.
+ * Redirect URI behaviour:
+ *   expo-auth-session/providers/google picks the redirect URI automatically:
+ *
+ *   • androidClientId set → com.googleusercontent.apps.{id}://oauth2redirect/android
+ *     (Android OAuth client type; custom scheme is allowed for native clients)
+ *   • iosClientId set    → reversed iOS client-ID scheme
+ *     (iOS OAuth client type; custom scheme is allowed for native clients)
+ *   • Neither set (web client only on native) → the hook generates the reversed
+ *     web-client-ID scheme, but Google's WEB client type forbids custom schemes and
+ *     expo-auth-session throws "Custom scheme URIs are not allowed for 'WEB' client type".
+ *     Fix: pass useProxy:true so the Expo auth proxy (https://auth.expo.io/…) is
+ *     used instead. This HTTPS URL must be registered in the Web client's
+ *     "Authorized redirect URIs" in Google Cloud Console.
+ *     Works in Expo Go and development builds; for standalone EAS builds you
+ *     must configure EXPO_PUBLIC_GOOGLE_ANDROID/IOS_CLIENT_ID.
  */
 
 import Constants from "expo-constants"
 import * as WebBrowser from "expo-web-browser"
 import * as Google from "expo-auth-session/providers/google"
 import { GoogleAuthProvider, signInWithCredential } from "firebase/auth"
+import { Platform } from "react-native"
 
 import { firebaseAuth } from "@/services/firebase"
 
@@ -33,14 +40,24 @@ export function useGoogleSignIn() {
   const iosClientId = extra.googleIosClientId as string | undefined
   const androidClientId = extra.googleAndroidClientId as string | undefined
 
-  // Do not pass redirectUri – let expo-auth-session generate the correct
-  // platform-specific URI. Overriding with a custom scheme (e.g. corsanative://)
-  // causes Google to return Error 400: invalid_request.
-  const [request, , promptAsync] = Google.useIdTokenAuthRequest({
-    clientId: webClientId ?? "",
-    iosClientId,
-    androidClientId,
-  })
+  // Google's WEB client type does not allow custom-scheme redirect URIs.
+  // When on native without a platform-specific client ID, expo-auth-session
+  // falls back to the web client and generates a custom scheme → error.
+  // Use the Expo auth proxy (HTTPS) in that case so the web client accepts it.
+  // When platform client IDs are present, useProxy is false and expo-auth-session
+  // uses the correct native OAuth client scheme automatically.
+  const useProxy =
+    (Platform.OS === "android" && !androidClientId) ||
+    (Platform.OS === "ios" && !iosClientId)
+
+  const [request, , promptAsync] = Google.useIdTokenAuthRequest(
+    {
+      clientId: webClientId ?? "",
+      iosClientId,
+      androidClientId,
+    },
+    { useProxy },
+  )
 
   const signInWithGoogle = async (): Promise<void> => {
     if (!webClientId && !iosClientId && !androidClientId) {

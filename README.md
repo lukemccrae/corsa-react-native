@@ -46,9 +46,9 @@ Go to **[Google Cloud Console](https://console.cloud.google.com/) → APIs & Ser
 
 | Client type | When needed | Settings |
 |---|---|---|
-| **Web application** | Always (Expo Go + web) | Add `https://auth.expo.io/@<your-expo-username>/CorsaNative` to Authorized redirect URIs |
-| **Android** | Native Android builds | Package: `com.corsanative`, SHA-1: your debug/release fingerprint |
-| **iOS** | Native iOS builds | Bundle ID: `com.corsanative` |
+| **Web application** | Always required | Add `https://auth.expo.io/@<your-expo-username>/CorsaNative` to Authorized redirect URIs (needed when no platform client IDs are set) |
+| **Android** | Standalone EAS builds / dev clients | Package: `com.corsanative`, SHA-1: your debug/release fingerprint |
+| **iOS** | Standalone EAS builds / dev clients | Bundle ID: `com.corsanative` |
 
 > **Tip**: Firebase Console → Authentication → Sign-in method → Google shows the **Web client ID** once Google sign-in is enabled. You can also create/view all OAuth credentials in the linked Google Cloud project.
 
@@ -66,19 +66,17 @@ Register this SHA-1 in both:
 - **Google Cloud Console** → the Android OAuth client you created above
 - **Firebase Console** → Project Settings → Your Android app → Add fingerprint
 
-#### 3. How redirect URIs work (no manual configuration needed)
+#### 3. How redirect URIs work
 
-`expo-auth-session` generates the correct redirect URI automatically per platform:
+Google's **WEB client type does not allow custom-scheme redirect URIs** (e.g. `corsanative://`). The app handles this automatically:
 
-| Platform | Redirect URI used |
-|---|---|
-| Expo Go / web | `https://auth.expo.io/@<username>/CorsaNative` (requires Web client ID) |
-| Android native build | `com.googleusercontent.apps.<androidClientId>://oauth2redirect/android` |
-| iOS native build | Reversed iOS client-ID scheme (e.g. `com.googleusercontent.apps.<iosClientId>:/oauth2redirect`) |
+| Scenario | Redirect URI used | What you must do |
+|---|---|---|
+| **No platform client IDs set** (Expo Go / dev, Android or iOS) | `https://auth.expo.io/@<username>/CorsaNative` (Expo auth proxy) | Register this URL in the Web client's Authorized redirect URIs |
+| **`androidClientId` set** (EAS Android build) | `com.googleusercontent.apps.<androidClientId>://oauth2redirect/android` | Nothing – auto-registered when you create the Android OAuth client |
+| **`iosClientId` set** (EAS iOS build) | Reversed iOS client-ID scheme | Nothing – auto-registered when you create the iOS OAuth client |
 
-The Android and iOS redirect URIs are automatically registered when you create the platform OAuth client — no manual "Authorized redirect URI" entry is needed for those.
-
-> **Expo Go vs native builds**: Google sign-in via `expo-auth-session` works in Expo Go using the web OAuth flow (only `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` is required). For EAS / bare workflow builds, supply the iOS and/or Android client IDs so the native OAuth flow is used.
+> **In practice**: during development (Expo Go or Android/iOS emulator) only `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` is required — just register the Expo proxy URL in its Authorized redirect URIs. For standalone EAS builds, set the platform-specific client IDs; they use native OAuth flows and do not need the proxy.
 
 ## MapLibre Map Setup
 
