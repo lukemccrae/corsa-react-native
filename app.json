@@ -9,7 +9,7 @@
   "updates": {
     "fallbackToCacheTimeout": 0
   },
-  "newArchEnabled": true,
+  "newArchEnabled": false,
   "jsEngine": "hermes",
   "assetBundlePatterns": [
     "**/*"
