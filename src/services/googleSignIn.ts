@@ -8,10 +8,14 @@
  * Build notes:
  *   - In Expo Go only the webClientId is used (no native Google SDK).
  *   - For native builds (EAS / bare workflow) supply iosClientId / androidClientId
- *     in your .env so Google returns a native-app credential.
+ *     in your .env so Google uses the correct platform-specific OAuth flow.
+ *   - Do NOT override redirectUri – expo-auth-session/providers/google computes the
+ *     correct platform redirect URI automatically:
+ *       Android: com.googleusercontent.apps.{androidClientId}://oauth2redirect/android
+ *       iOS:     reversed iOS client-ID scheme
+ *     Passing a custom scheme like "corsanative://" causes Error 400: invalid_request.
  */
 
-import { makeRedirectUri } from "expo-auth-session"
 import Constants from "expo-constants"
 import * as WebBrowser from "expo-web-browser"
 import * as Google from "expo-auth-session/providers/google"
@@ -25,19 +29,30 @@ WebBrowser.maybeCompleteAuthSession()
 export function useGoogleSignIn() {
   const extra = Constants.expoConfig?.extra ?? {}
 
-  const redirectUri = makeRedirectUri({
-    // Must match the "scheme" field in app.json ("corsanative").
-    scheme: "corsanative",
-  })
+  const webClientId = extra.googleWebClientId as string | undefined
+  const iosClientId = extra.googleIosClientId as string | undefined
+  const androidClientId = extra.googleAndroidClientId as string | undefined
 
+  // Do not pass redirectUri – let expo-auth-session generate the correct
+  // platform-specific URI. Overriding with a custom scheme (e.g. corsanative://)
+  // causes Google to return Error 400: invalid_request.
   const [request, , promptAsync] = Google.useIdTokenAuthRequest({
-    clientId: (extra.googleWebClientId as string | undefined) ?? "",
-    iosClientId: extra.googleIosClientId as string | undefined,
-    androidClientId: extra.googleAndroidClientId as string | undefined,
-    redirectUri,
+    clientId: webClientId ?? "",
+    iosClientId,
+    androidClientId,
   })
 
   const signInWithGoogle = async (): Promise<void> => {
+    if (!webClientId && !iosClientId && !androidClientId) {
+      throw new Error(
+        "[GoogleSignIn] No Google OAuth client IDs configured. " +
+          "Set EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID (required for Expo Go / web flow) and, " +
+          "for native builds, EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID and/or " +
+          "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID in your .env file. " +
+          "See .env.example and README for setup instructions.",
+      )
+    }
+
     const result = await promptAsync()
 
     if (result.type !== "success") return

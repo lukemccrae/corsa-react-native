@@ -27,7 +27,7 @@ EXPO_PUBLIC_FIREBASE_APP_ID=your_app_id
 
 # Google Sign-In (Sign in with Google via Firebase Auth)
 EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=your_google_web_client_id.apps.googleusercontent.com
-# Optional – improves the native sign-in experience on EAS / bare builds:
+# Optional – required for native builds (EAS / bare workflow):
 EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=your_google_ios_client_id.apps.googleusercontent.com
 EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=your_google_android_client_id.apps.googleusercontent.com
 ```
@@ -36,7 +36,49 @@ These are read at build time via `app.config.ts` and exposed through `expo-const
 
 > **Note**: Enable **Email/Password** and **Google** sign-in in the Firebase console under **Authentication → Sign-in method**. For Google sign-in, the **Web client ID** is listed on that same page once Google is enabled.
 
-> **Expo Go vs native builds**: Google sign-in via `expo-auth-session` works in Expo Go using the web OAuth flow (only `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` is required). For EAS / bare workflow builds, supply the iOS and Android client IDs as well so the native Google SDK is used instead.
+### Google Sign-In Setup
+
+Google sign-in uses `expo-auth-session/providers/google` to obtain an ID token, which is then exchanged for a Firebase credential. The redirect URI is generated **automatically by expo-auth-session** — do not override it with a custom scheme, as that causes `Error 400: invalid_request`.
+
+#### 1. Create OAuth 2.0 Client IDs in Google Cloud Console
+
+Go to **[Google Cloud Console](https://console.cloud.google.com/) → APIs & Services → Credentials → Create Credentials → OAuth client ID**.
+
+| Client type | When needed | Settings |
+|---|---|---|
+| **Web application** | Always (Expo Go + web) | Add `https://auth.expo.io/@<your-expo-username>/CorsaNative` to Authorized redirect URIs |
+| **Android** | Native Android builds | Package: `com.corsanative`, SHA-1: your debug/release fingerprint |
+| **iOS** | Native iOS builds | Bundle ID: `com.corsanative` |
+
+> **Tip**: Firebase Console → Authentication → Sign-in method → Google shows the **Web client ID** once Google sign-in is enabled. You can also create/view all OAuth credentials in the linked Google Cloud project.
+
+#### 2. Android SHA-1 Fingerprint
+
+The Android OAuth client requires your signing certificate SHA-1. For **debug / emulator** builds:
+
+```bash
+# macOS / Linux
+keytool -keystore ~/.android/debug.keystore -list -v \
+  -alias androiddebugkey -storepass android -keypass android
+```
+
+Register this SHA-1 in both:
+- **Google Cloud Console** → the Android OAuth client you created above
+- **Firebase Console** → Project Settings → Your Android app → Add fingerprint
+
+#### 3. How redirect URIs work (no manual configuration needed)
+
+`expo-auth-session` generates the correct redirect URI automatically per platform:
+
+| Platform | Redirect URI used |
+|---|---|
+| Expo Go / web | `https://auth.expo.io/@<username>/CorsaNative` (requires Web client ID) |
+| Android native build | `com.googleusercontent.apps.<androidClientId>://oauth2redirect/android` |
+| iOS native build | Reversed iOS client-ID scheme (e.g. `com.googleusercontent.apps.<iosClientId>:/oauth2redirect`) |
+
+The Android and iOS redirect URIs are automatically registered when you create the platform OAuth client — no manual "Authorized redirect URI" entry is needed for those.
+
+> **Expo Go vs native builds**: Google sign-in via `expo-auth-session` works in Expo Go using the web OAuth flow (only `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` is required). For EAS / bare workflow builds, supply the iOS and/or Android client IDs so the native OAuth flow is used.
 
 ## MapLibre Map Setup
 
