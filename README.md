@@ -27,7 +27,7 @@ EXPO_PUBLIC_FIREBASE_APP_ID=your_app_id
 
 # Google Sign-In (Sign in with Google via Firebase Auth)
 EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=your_google_web_client_id.apps.googleusercontent.com
-# Optional – improves the native sign-in experience on EAS / bare builds:
+# Optional – required for native builds (EAS / bare workflow):
 EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=your_google_ios_client_id.apps.googleusercontent.com
 EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=your_google_android_client_id.apps.googleusercontent.com
 ```
@@ -36,7 +36,54 @@ These are read at build time via `app.config.ts` and exposed through `expo-const
 
 > **Note**: Enable **Email/Password** and **Google** sign-in in the Firebase console under **Authentication → Sign-in method**. For Google sign-in, the **Web client ID** is listed on that same page once Google is enabled.
 
-> **Expo Go vs native builds**: Google sign-in via `expo-auth-session` works in Expo Go using the web OAuth flow (only `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` is required). For EAS / bare workflow builds, supply the iOS and Android client IDs as well so the native Google SDK is used instead.
+### Google Sign-In Setup
+
+Google sign-in uses `expo-auth-session/providers/google` to obtain an ID token, which is then exchanged for a Firebase credential. The redirect URI is generated **automatically by expo-auth-session** — do not override it with a custom scheme, as that causes `Error 400: invalid_request`.
+
+#### 1. Create OAuth 2.0 Client IDs in Google Cloud Console
+
+Go to **[Google Cloud Console](https://console.cloud.google.com/) → APIs & Services → Credentials → Create Credentials → OAuth client ID**.
+
+| Client type | When needed | Settings |
+|---|---|---|
+| **Web application** | Always required | Add `https://auth.expo.io/@lukemccrae/CorsaNative` to **Authorized redirect URIs** *(replace `lukemccrae` with your Expo username if forking)* |
+| **Android** | Recommended for EAS Android builds | Package: `com.corsanative`, SHA-1: your debug/release fingerprint |
+| **iOS** | Recommended for EAS iOS builds | Bundle ID: `com.corsanative` |
+
+> **Tip**: Firebase Console → Authentication → Sign-in method → Google shows the **Web client ID** once Google sign-in is enabled. You can also create/view all OAuth credentials in the linked Google Cloud project.
+
+#### 2. Android SHA-1 Fingerprint
+
+The Android OAuth client requires your signing certificate SHA-1. For **debug / emulator** builds:
+
+```bash
+# macOS / Linux
+keytool -keystore ~/.android/debug.keystore -list -v \
+  -alias androiddebugkey -storepass android -keypass android
+```
+
+Register this SHA-1 in both:
+- **Google Cloud Console** → the Android OAuth client you created above
+- **Firebase Console** → Project Settings → Your Android app → Add fingerprint
+
+#### 3. How redirect URIs work
+
+Google's **WEB client type rejects custom-scheme redirect URIs** (e.g. `corsanative://`). The app handles this with an automatic proxy flow:
+
+| Scenario | Redirect URI sent to Google | What you must do |
+|---|---|---|
+| **No platform client IDs set** (dev build, Android or iOS) | `https://auth.expo.io/@lukemccrae/CorsaNative` via Expo auth proxy *(replace `lukemccrae` with your Expo username in `app.json` `owner` if forking)* | Register this URL in the Web client's Authorized redirect URIs *(already listed above)* |
+| **`EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID` set** | `com.corsanative:/oauthredirect` (native Android client type — allows custom schemes) | Nothing – auto-registered when you create the Android OAuth client |
+| **`EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` set** | Reversed iOS client-ID scheme (native iOS client type — allows custom schemes) | Nothing – auto-registered when you create the iOS OAuth client |
+
+**How the proxy flow works (SDK 55+):**
+In expo-auth-session SDK 55, the `useProxy` API was removed. The app now manually implements the proxy flow for the no-platform-client-ID case:
+1. The Google OAuth request uses `redirect_uri=https://auth.expo.io/@lukemccrae/CorsaNative` (HTTPS → accepted by WEB client).
+2. The browser opens `https://auth.expo.io/…/start?authUrl=…&returnUrl=corsanative://`.
+3. The Expo proxy relays: Google → proxy callback → app deep link (`corsanative://`).
+4. The authorization code is exchanged for an id_token using PKCE (no client_secret needed).
+
+> **In practice**: for development and testing, only `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` is required (plus registering the proxy URL). For production EAS builds, configure `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID` and/or `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` to bypass the proxy and use native OAuth clients.
 
 ## MapLibre Map Setup
 
