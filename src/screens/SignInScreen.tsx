@@ -12,7 +12,7 @@ import type { ThemedStyle } from "@/theme/types"
 
 export const SignInScreen: FC = function SignInScreen() {
   const { themed } = useAppTheme()
-  const { signIn, signUp } = useAuth()
+  const { signIn, signUp, signInWithGoogle } = useAuth()
 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -41,6 +41,18 @@ export const SignInScreen: FC = function SignInScreen() {
       } else {
         setError("signInScreen:errorGeneric")
       }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleGoogleSignIn = async () => {
+    setError(null)
+    setLoading(true)
+    try {
+      await signInWithGoogle()
+    } catch {
+      setError("signInScreen:errorGeneric")
     } finally {
       setLoading(false)
     }
@@ -84,12 +96,20 @@ export const SignInScreen: FC = function SignInScreen() {
         {loading ? (
           <ActivityIndicator style={themed($loader)} />
         ) : (
-          <Button
-            tx={isSignUp ? "signInScreen:signUpButton" : "signInScreen:signInButton"}
-            preset="reversed"
-            onPress={handleSubmit}
-            style={themed($submitButton)}
-          />
+          <>
+            <Button
+              tx={isSignUp ? "signInScreen:signUpButton" : "signInScreen:signInButton"}
+              preset="reversed"
+              onPress={handleSubmit}
+              style={themed($submitButton)}
+            />
+            <Button
+              tx="signInScreen:signInWithGoogle"
+              preset="default"
+              onPress={handleGoogleSignIn}
+              style={themed($googleButton)}
+            />
+          </>
         )}
 
         <View style={themed($toggleRow)}>
@@ -138,6 +158,10 @@ const $loader: ViewStyle = {
 
 const $submitButton: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   marginTop: spacing.sm,
+  marginBottom: spacing.sm,
+})
+
+const $googleButton: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   marginBottom: spacing.lg,
 })
 

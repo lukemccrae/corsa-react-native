@@ -15,7 +15,5 @@ declare module "firebase/auth" {
    * implementation, suitable for use with `initializeAuth()` in a React
    * Native project.
    */
-  export function getReactNativePersistence(
-    storage: ReactNativeAsyncStorage,
-  ): Persistence
+  export function getReactNativePersistence(storage: ReactNativeAsyncStorage): Persistence
 }
