@@ -38,7 +38,31 @@ These are read at build time via `app.config.ts` and exposed through `expo-const
 
 > **Expo Go vs native builds**: Google sign-in via `expo-auth-session` works in Expo Go using the web OAuth flow (only `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` is required). For EAS / bare workflow builds, supply the iOS and Android client IDs as well so the native Google SDK is used instead.
 
-## Getting Started
+## MapLibre Map Setup
+
+This app uses [MapLibre React Native](https://github.com/maplibre/maplibre-react-native) (`@maplibre/maplibre-react-native`) for map rendering instead of `react-native-maps`, so **no Google Maps API key is required**.
+
+### Tile Provider
+
+The default style is [OpenFreeMap Liberty](https://openfreemap.org/) — a free, open-source vector tile service backed by OpenStreetMap data with no API key required.
+
+The style URL is defined as `TILE_STYLE_URL` in `src/components/Map/MapLibreMap.tsx`. Swap it with any [MapLibre-compatible style URL](https://maplibre.org/maplibre-style-spec/) for production use (e.g., a MapTiler or Stadia Maps style with a free-tier API key).
+
+> **Note:** OpenFreeMap and the public OSM raster tile servers are intended for development/low-traffic use. For a production app with many users, subscribe to a tile hosting provider or self-host tiles.
+
+### Rebuilding the Dev Client
+
+Because MapLibre includes native code, you must **rebuild the dev client** after adding the package:
+
+```bash
+# iOS simulator
+pnpm run build:ios:sim
+
+# Android device/emulator
+pnpm run build:android:device
+```
+
+
 
 ```bash
 pnpm install

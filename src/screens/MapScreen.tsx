@@ -2,23 +2,20 @@ import { FC, useCallback, useEffect, useRef, useState } from "react"
 import { Linking, Platform, StyleSheet, TextStyle, View, ViewStyle } from "react-native"
 import * as Location from "expo-location"
 import { useRouter } from "expo-router"
-import MapView, { MapViewProps, Region } from "react-native-maps"
 
 import { Button } from "@/components/Button"
+import { MapLibreMap, MapLibreMapRef } from "@/components/Map/MapLibreMap"
 import { Text } from "@/components/Text"
 import { useAuth } from "@/providers/AuthProvider"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
 
-const DEFAULT_DELTA = { latitudeDelta: 0.01, longitudeDelta: 0.01 }
-
 export const MapScreen: FC = function MapScreen() {
   const { themed } = useAppTheme()
   const { user, signOut } = useAuth()
   const router = useRouter()
-  const mapRef = useRef<MapView>(null)
+  const mapRef = useRef<MapLibreMapRef>(null)
 
-  const [region, setRegion] = useState<Region | null>(null)
   const [permissionStatus, setPermissionStatus] = useState<Location.PermissionStatus | null>(null)
   const [locationError, setLocationError] = useState(false)
 
@@ -30,12 +27,8 @@ export const MapScreen: FC = function MapScreen() {
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
       })
-      const newRegion: Region = {
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-        ...DEFAULT_DELTA,
-      }
-      setRegion(newRegion)
+      // MapLibre uses [longitude, latitude] (GeoJSON) coordinate ordering.
+      mapRef.current?.flyTo(location.coords.longitude, location.coords.latitude)
     }
   }, [])
 
@@ -50,13 +43,8 @@ export const MapScreen: FC = function MapScreen() {
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
       })
-      const newRegion: Region = {
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-        ...DEFAULT_DELTA,
-      }
-      setRegion(newRegion)
-      mapRef.current?.animateToRegion(newRegion, 500)
+      // MapLibre uses [longitude, latitude] (GeoJSON) coordinate ordering.
+      mapRef.current?.flyTo(location.coords.longitude, location.coords.latitude, 500)
     } catch {
       setLocationError(true)
     }
@@ -70,13 +58,12 @@ export const MapScreen: FC = function MapScreen() {
     }
   }, [])
 
-  const mapProps: MapViewProps = region
-    ? { region, showsUserLocation: true, showsMyLocationButton: false }
-    : { showsUserLocation: true, showsMyLocationButton: false }
-
   return (
     <View style={styles.container}>
-      <MapView ref={mapRef} style={styles.map} {...mapProps} />
+      <MapLibreMap
+        ref={mapRef}
+        showUserLocation={permissionStatus === Location.PermissionStatus.GRANTED}
+      />
 
       {/* Overlay buttons */}
       <View style={themed($buttonContainer)}>
@@ -143,9 +130,6 @@ export const MapScreen: FC = function MapScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  map: {
-    ...StyleSheet.absoluteFillObject,
   },
 })
 
