@@ -24,11 +24,15 @@ export const MapScreen: FC = function MapScreen() {
     setPermissionStatus(status)
 
     if (status === Location.PermissionStatus.GRANTED) {
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      })
-      // MapLibre uses [longitude, latitude] (GeoJSON) coordinate ordering.
-      mapRef.current?.flyTo(location.coords.longitude, location.coords.latitude)
+      try {
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        })
+        // MapLibre uses [longitude, latitude] (GeoJSON) coordinate ordering.
+        mapRef.current?.flyTo(location.coords.longitude, location.coords.latitude)
+      } catch {
+        setLocationError(true)
+      }
     }
   }, [])
 
