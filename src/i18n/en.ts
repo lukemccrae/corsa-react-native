@@ -31,6 +31,7 @@ const en = {
     passwordPlaceholder: "••••••••",
     signInButton: "Sign In",
     signUpButton: "Create Account",
+    signInWithGoogle: "Continue with Google",
     noAccount: "Don't have an account?",
     haveAccount: "Already have an account?",
     errorInvalidCredentials: "Invalid email or password.",
@@ -38,10 +39,10 @@ const en = {
   },
   mapScreen: {
     centerOnMe: "Center on me",
+    signIn: "Sign in",
     signOut: "Sign out",
     locationPermissionDenied: "Location access denied.",
-    locationPermissionMessage:
-      "Enable location in Settings to see your position on the map.",
+    locationPermissionMessage: "Enable location in Settings to see your position on the map.",
     openSettings: "Open Settings",
     retry: "Retry",
     locationError: "Could not get your location. Please try again.",
