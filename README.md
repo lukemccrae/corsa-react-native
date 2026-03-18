@@ -46,9 +46,9 @@ Go to **[Google Cloud Console](https://console.cloud.google.com/) → APIs & Ser
 
 | Client type | When needed | Settings |
 |---|---|---|
-| **Web application** | Always required | Add `https://auth.expo.io/@<your-expo-username>/CorsaNative` to Authorized redirect URIs (needed when no platform client IDs are set) |
-| **Android** | Standalone EAS builds / dev clients | Package: `com.corsanative`, SHA-1: your debug/release fingerprint |
-| **iOS** | Standalone EAS builds / dev clients | Bundle ID: `com.corsanative` |
+| **Web application** | Always required | Add `https://auth.expo.io/@lukemccrae/CorsaNative` to **Authorized redirect URIs** *(replace `lukemccrae` with your Expo username if forking)* |
+| **Android** | Recommended for EAS Android builds | Package: `com.corsanative`, SHA-1: your debug/release fingerprint |
+| **iOS** | Recommended for EAS iOS builds | Bundle ID: `com.corsanative` |
 
 > **Tip**: Firebase Console → Authentication → Sign-in method → Google shows the **Web client ID** once Google sign-in is enabled. You can also create/view all OAuth credentials in the linked Google Cloud project.
 
@@ -68,15 +68,22 @@ Register this SHA-1 in both:
 
 #### 3. How redirect URIs work
 
-Google's **WEB client type does not allow custom-scheme redirect URIs** (e.g. `corsanative://`). The app handles this automatically:
+Google's **WEB client type rejects custom-scheme redirect URIs** (e.g. `corsanative://`). The app handles this with an automatic proxy flow:
 
-| Scenario | Redirect URI used | What you must do |
+| Scenario | Redirect URI sent to Google | What you must do |
 |---|---|---|
-| **No platform client IDs set** (Expo Go / dev, Android or iOS) | `https://auth.expo.io/@<username>/CorsaNative` (Expo auth proxy) | Register this URL in the Web client's Authorized redirect URIs |
-| **`androidClientId` set** (EAS Android build) | `com.googleusercontent.apps.<androidClientId>://oauth2redirect/android` | Nothing – auto-registered when you create the Android OAuth client |
-| **`iosClientId` set** (EAS iOS build) | Reversed iOS client-ID scheme | Nothing – auto-registered when you create the iOS OAuth client |
+| **No platform client IDs set** (dev build, Android or iOS) | `https://auth.expo.io/@lukemccrae/CorsaNative` via Expo auth proxy *(replace `lukemccrae` with your Expo username in `app.json` `owner` if forking)* | Register this URL in the Web client's Authorized redirect URIs *(already listed above)* |
+| **`EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID` set** | `com.corsanative:/oauthredirect` (native Android client type — allows custom schemes) | Nothing – auto-registered when you create the Android OAuth client |
+| **`EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` set** | Reversed iOS client-ID scheme (native iOS client type — allows custom schemes) | Nothing – auto-registered when you create the iOS OAuth client |
 
-> **In practice**: during development (Expo Go or Android/iOS emulator) only `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` is required — just register the Expo proxy URL in its Authorized redirect URIs. For standalone EAS builds, set the platform-specific client IDs; they use native OAuth flows and do not need the proxy.
+**How the proxy flow works (SDK 55+):**
+In expo-auth-session SDK 55, the `useProxy` API was removed. The app now manually implements the proxy flow for the no-platform-client-ID case:
+1. The Google OAuth request uses `redirect_uri=https://auth.expo.io/@lukemccrae/CorsaNative` (HTTPS → accepted by WEB client).
+2. The browser opens `https://auth.expo.io/…/start?authUrl=…&returnUrl=corsanative://`.
+3. The Expo proxy relays: Google → proxy callback → app deep link (`corsanative://`).
+4. The authorization code is exchanged for an id_token using PKCE (no client_secret needed).
+
+> **In practice**: for development and testing, only `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` is required (plus registering the proxy URL). For production EAS builds, configure `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID` and/or `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` to bypass the proxy and use native OAuth clients.
 
 ## MapLibre Map Setup
 

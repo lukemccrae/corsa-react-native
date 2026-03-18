@@ -1,6 +1,7 @@
 {
   "name": "CorsaNative",
   "slug": "CorsaNative",
+  "owner": "lukemccrae",
   "scheme": "corsanative",
   "version": "1.0.0",
   "orientation": "portrait",
