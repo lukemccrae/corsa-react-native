@@ -8,6 +8,7 @@ import {
 } from "firebase/auth"
 
 import { firebaseAuth } from "@/services/firebase"
+import { useGoogleSignIn } from "@/services/googleSignIn"
 
 export type AuthContextType = {
   user: User | null
@@ -15,6 +16,7 @@ export type AuthContextType = {
   signIn: (email: string, password: string) => Promise<void>
   signUp: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
+  signInWithGoogle: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
@@ -23,6 +25,7 @@ export const AuthProvider: FC<PropsWithChildren> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // Firebase persists the session; onAuthStateChanged initializes user on mount.
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(firebaseAuth, (firebaseUser) => {
       setUser(firebaseUser)
@@ -43,8 +46,10 @@ export const AuthProvider: FC<PropsWithChildren> = ({ children }) => {
     await firebaseSignOut(firebaseAuth)
   }
 
+  const { signInWithGoogle } = useGoogleSignIn()
+
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut, signInWithGoogle }}>
       {children}
     </AuthContext.Provider>
   )
