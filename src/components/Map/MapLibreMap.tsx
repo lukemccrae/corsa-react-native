@@ -53,7 +53,9 @@ export const MapLibreMap = forwardRef<MapLibreMapRef, MapLibreMapProps>(function
   return (
     <MapLibreGL.MapView style={styles.map} mapStyle={TILE_STYLE_URL} logoEnabled={false}>
       <MapLibreGL.Camera ref={cameraRef} zoomLevel={2} animationDuration={0} />
-      {showUserLocation && <MapLibreGL.UserLocation visible />}
+      {/* animated={false} avoids AnimatedPoint creation which crashes on RN 0.83
+          due to AnimatedNode._listeners changing from plain object to Map. */}
+      {showUserLocation && <MapLibreGL.UserLocation visible animated={false} />}
     </MapLibreGL.MapView>
   )
 })

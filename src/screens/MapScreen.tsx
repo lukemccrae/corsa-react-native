@@ -30,7 +30,8 @@ export const MapScreen: FC = function MapScreen() {
         })
         // MapLibre uses [longitude, latitude] (GeoJSON) coordinate ordering.
         mapRef.current?.flyTo(location.coords.longitude, location.coords.latitude)
-      } catch {
+      } catch (error) {
+        if (__DEV__) console.warn("Location unavailable on startup:", error)
         setLocationError(true)
       }
     }
@@ -49,7 +50,8 @@ export const MapScreen: FC = function MapScreen() {
       })
       // MapLibre uses [longitude, latitude] (GeoJSON) coordinate ordering.
       mapRef.current?.flyTo(location.coords.longitude, location.coords.latitude, 500)
-    } catch {
+    } catch (error) {
+      if (__DEV__) console.warn("Location unavailable on center-on-me:", error)
       setLocationError(true)
     }
   }, [permissionStatus])
