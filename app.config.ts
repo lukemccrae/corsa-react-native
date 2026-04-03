@@ -17,10 +17,28 @@ import "tsx/cjs"
 module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
   const existingPlugins = config.plugins ?? []
 
+  // Compute the reverse client ID URL scheme so iOS can route the OAuth
+  // callback back to the app. e.g. com.googleusercontent.apps.183920355653-xxxx
+  const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? ""
+  const reverseIosClientId = iosClientId
+    ? iosClientId.split(".").reverse().join(".")
+    : undefined
+
   return {
     ...config,
     ios: {
       ...config.ios,
+      infoPlist: {
+        ...config.ios?.infoPlist,
+        // Register the reverse client ID scheme so iOS routes the OAuth
+        // redirect back to this app after Google authentication.
+        ...(reverseIosClientId && {
+          CFBundleURLTypes: [
+            ...((config.ios?.infoPlist?.CFBundleURLTypes as object[]) ?? []),
+            { CFBundleURLSchemes: [reverseIosClientId] },
+          ],
+        }),
+      },
       // This privacyManifests is to get you started.
       // See Expo's guide on apple privacy manifests here:
       // https://docs.expo.dev/guides/apple-privacy/

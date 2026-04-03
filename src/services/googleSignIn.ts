@@ -6,12 +6,14 @@
  *   <Button onPress={signInWithGoogle} disabled={!request} />
  *
  * Build notes:
- *   - In Expo Go only the webClientId is used (no native Google SDK).
  *   - For native builds (EAS / bare workflow) supply iosClientId / androidClientId
  *     in your .env so Google returns a native-app credential.
+ *   - Native OAuth clients require the redirect URI to be the reverse of the
+ *     client ID: com.googleusercontent.apps.{id-prefix}:/oauthredirect
+ *     This scheme must also be registered in Info.plist (handled by app.config.ts).
  */
 
-import { makeRedirectUri } from "expo-auth-session"
+import { Platform } from "react-native"
 import Constants from "expo-constants"
 import * as WebBrowser from "expo-web-browser"
 import * as Google from "expo-auth-session/providers/google"
@@ -22,20 +24,35 @@ import { firebaseAuth } from "@/services/firebase"
 // Required: completes the auth session redirect on iOS/Android.
 WebBrowser.maybeCompleteAuthSession()
 
+/**
+ * Converts a Google OAuth client ID to the reverse-domain redirect URI that
+ * native iOS/Android clients require.
+ * e.g. "183920355653-xxxx.apps.googleusercontent.com"
+ *   -> "com.googleusercontent.apps.183920355653-xxxx:/oauthredirect"
+ */
+function reverseClientIdRedirectUri(clientId: string): string {
+  return `${clientId.split(".").reverse().join(".")}:/oauthredirect`
+}
+
 export function useGoogleSignIn() {
   const extra = Constants.expoConfig?.extra ?? {}
 
-  const redirectUri = makeRedirectUri({
-    // Must match the "scheme" field in app.json ("corsanative").
-    scheme: "corsanative",
-  })
+  const iosClientId = extra.googleIosClientId as string | undefined
+  const androidClientId = extra.googleAndroidClientId as string | undefined
 
-  const [request, , promptAsync] = Google.useIdTokenAuthRequest({
-    clientId: (extra.googleWebClientId as string | undefined) ?? "",
-    iosClientId: extra.googleIosClientId as string | undefined,
-    androidClientId: extra.googleAndroidClientId as string | undefined,
-    redirectUri,
-  })
+  // Google native OAuth clients require the reverse client ID as the redirect URI.
+  // The web client ID is still needed so Firebase can validate the ID token.
+  const nativeClientId = Platform.OS === "ios" ? iosClientId : androidClientId
+  const redirectUri = nativeClientId ? reverseClientIdRedirectUri(nativeClientId) : undefined
+
+  const [request, , promptAsync] = Google.useIdTokenAuthRequest(
+    {
+      clientId: (extra.googleWebClientId as string | undefined) ?? "",
+      iosClientId,
+      androidClientId,
+    },
+    redirectUri ? { native: redirectUri } : {},
+  )
 
   const signInWithGoogle = async (): Promise<void> => {
     const result = await promptAsync()
