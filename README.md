@@ -38,6 +38,10 @@ These are read at build time via `app.config.ts` and exposed through `expo-const
 
 > **Expo Go vs native builds**: Google sign-in via `expo-auth-session` works in Expo Go using the web OAuth flow (only `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` is required). For EAS / bare workflow builds, supply the iOS and Android client IDs as well so the native Google SDK is used instead.
 
+## GraphQL Code Generator
+
+Run `yarn codegen` to regenerate TypeScript types from the AppSync GraphQL schema. See [docs/codegen.md](docs/codegen.md) for setup instructions.
+
 ## MapLibre Map Setup
 
 This app uses [MapLibre React Native](https://github.com/maplibre/maplibre-react-native) (`@maplibre/maplibre-react-native`) for map rendering instead of `react-native-maps`, so **no Google Maps API key is required**.
