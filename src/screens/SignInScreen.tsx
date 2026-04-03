@@ -51,7 +51,8 @@ export const SignInScreen: FC = function SignInScreen() {
     setLoading(true)
     try {
       await signInWithGoogle()
-    } catch {
+    } catch (err) {
+      console.error("Google sign-in error:", err)
       setError("signInScreen:errorGeneric")
     } finally {
       setLoading(false)
