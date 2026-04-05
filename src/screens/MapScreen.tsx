@@ -1,5 +1,14 @@
 import { FC, useCallback, useEffect, useRef, useState } from "react"
-import { Linking, Platform, StyleSheet, TextStyle, View, ViewStyle } from "react-native"
+import {
+  Image,
+  ImageStyle,
+  Linking,
+  Platform,
+  StyleSheet,
+  TextStyle,
+  View,
+  ViewStyle,
+} from "react-native"
 import * as Location from "expo-location"
 import { useRouter } from "expo-router"
 
@@ -12,7 +21,7 @@ import type { ThemedStyle } from "@/theme/types"
 
 export const MapScreen: FC = function MapScreen() {
   const { themed } = useAppTheme()
-  const { user, signOut } = useAuth()
+  const { user, appUser, signOut } = useAuth()
   const router = useRouter()
   const mapRef = useRef<MapLibreMapRef>(null)
 
@@ -64,12 +73,28 @@ export const MapScreen: FC = function MapScreen() {
     }
   }, [])
 
+  const displayUsername = appUser?.username
+  const profilePictureUri = appUser?.profilePicture
+
   return (
     <View style={styles.container}>
       <MapLibreMap
         ref={mapRef}
         showUserLocation={permissionStatus === Location.PermissionStatus.GRANTED}
       />
+
+      {user && appUser ? (
+        <View style={themed($profileBadge)}>
+          {profilePictureUri ? (
+            <Image source={{ uri: profilePictureUri }} style={themed($avatar)} />
+          ) : (
+            <View style={themed($avatarFallback)} />
+          )}
+          {displayUsername ? (
+            <Text text={displayUsername} size="xs" numberOfLines={1} style={themed($profileName)} />
+          ) : null}
+        </View>
+      ) : null}
 
       {/* Overlay buttons */}
       <View style={themed($buttonContainer)}>
@@ -147,6 +172,43 @@ const $buttonContainer: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   flexDirection: "row",
   justifyContent: "space-between",
   gap: spacing.sm,
+})
+
+const $profileBadge: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
+  position: "absolute",
+  top: spacing.xl,
+  right: spacing.md,
+  flexDirection: "row",
+  alignItems: "center",
+  gap: spacing.xs,
+  maxWidth: 220,
+  backgroundColor: colors.background,
+  borderRadius: 999,
+  paddingVertical: spacing.xs,
+  paddingHorizontal: spacing.sm,
+  shadowColor: colors.palette.neutral900,
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.15,
+  shadowRadius: 8,
+  elevation: 4,
+})
+
+const $avatar: ThemedStyle<ImageStyle> = () => ({
+  width: 28,
+  height: 28,
+  borderRadius: 14,
+})
+
+const $avatarFallback: ThemedStyle<ViewStyle> = ({ colors }) => ({
+  width: 28,
+  height: 28,
+  borderRadius: 14,
+  backgroundColor: colors.palette.neutral300,
+})
+
+const $profileName: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.text,
+  flexShrink: 1,
 })
 
 const $mapButton: ThemedStyle<ViewStyle> = () => ({

@@ -30,6 +30,11 @@ EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=your_google_web_client_id.apps.googleuserconten
 # Optional – improves the native sign-in experience on EAS / bare builds:
 EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=your_google_ios_client_id.apps.googleusercontent.com
 EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=your_google_android_client_id.apps.googleusercontent.com
+EXPO_PUBLIC_CLOUDFRONT_PHOTO_URL=https://your-cloudfront-distribution.cloudfront.net
+
+# AppSync (runtime GraphQL fetches from the mobile app)
+EXPO_PUBLIC_APPSYNC_API_KEY=your_appsync_api_key
+EXPO_PUBLIC_APPSYNC_ENDPOINT=https://<your-api-id>.appsync-api.<region>.amazonaws.com/graphql
 ```
 
 These are read at build time via `app.config.ts` and exposed through `expo-constants`. You can find the Firebase values in your [Firebase console](https://console.firebase.google.com/) under **Project Settings → Your apps → SDK setup and configuration**.
