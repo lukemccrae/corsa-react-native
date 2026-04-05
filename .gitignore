@@ -94,3 +94,7 @@ app-dependency-graph.png
 .env
 .env.local
 package-lock.json
+
+# GraphQL Code Generator outputs
+src/generated/schema.ts
+graphql.schema.json
