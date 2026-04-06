@@ -18,6 +18,13 @@ type GetUserByUserNameResponse = {
   errors?: GraphQLError[]
 }
 
+type GetStreamsByEntityResponse = {
+  data?: {
+    getStreamsByEntity?: Array<LiveStream | null> | null
+  }
+  errors?: GraphQLError[]
+}
+
 const appSyncEndpoint =
   process.env.EXPO_PUBLIC_APPSYNC_ENDPOINT ?? process.env.APPSYNC_ENDPOINT ?? ""
 
@@ -190,6 +197,43 @@ const GET_USER_ROUTE_BY_ID = `
   }
 `
 
+const GET_STREAMS_BY_ENTITY = `
+  query GetStreamsByEntity($entity: String) {
+    getStreamsByEntity(entity: $entity) {
+      streamId
+      title
+      startTime
+      finishTime
+      live
+      published
+      mileMarker
+      timezone
+      unitOfMeasure
+      currentLocation {
+        lat
+        lng
+      }
+      publicUser {
+        profilePicture
+        username
+        userId
+        bio
+      }
+      route {
+        routeId
+        name
+        distanceInMiles
+        gainInFeet
+        processingStatus
+        createdAt
+        overlayPath
+        storagePath
+        uom
+      }
+    }
+  }
+`
+
 function resolveCloudFrontUrl(path: string | null | undefined): string {
   if (!path) return ""
   if (/^https?:\/\//i.test(path)) return path
@@ -349,4 +393,16 @@ export async function fetchUserRouteById(
   if (!route) return null
 
   return { user: normalizedUser, route }
+}
+
+export async function fetchPublicStreamsByEntity(entity = "STREAM"): Promise<LiveStream[]> {
+  const result = await executeApiKeyQuery<GetStreamsByEntityResponse["data"]>(GET_STREAMS_BY_ENTITY, {
+    entity,
+  })
+  const streams = result?.getStreamsByEntity ?? []
+
+  return streams
+    .filter((stream): stream is LiveStream => Boolean(stream))
+    .map((stream) => normalizeLiveStream(stream))
+    .filter((stream): stream is LiveStream => Boolean(stream))
 }

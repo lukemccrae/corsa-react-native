@@ -3,6 +3,12 @@ import * as Location from "expo-location"
 
 import { MapScreen } from "./MapScreen"
 
+const mockFetchPublicStreamsByEntity = jest.fn()
+
+jest.mock("@/services/api/graphql", () => ({
+  fetchPublicStreamsByEntity: () => mockFetchPublicStreamsByEntity(),
+}))
+
 jest.mock("expo-location", () => ({
   PermissionStatus: {
     GRANTED: "granted",
@@ -24,9 +30,19 @@ jest.mock("@/providers/AuthProvider", () => ({
   useAuth: () => mockUseAuth(),
 }))
 
-jest.mock("@/components/Map/MapLibreMap", () => ({
-  MapLibreMap: jest.fn(() => null),
-}))
+jest.mock("@/components/Map/MapLibreMap", () => {
+  const React = require("react")
+  return {
+    MapLibreMap: React.forwardRef((_props: object, ref: React.Ref<object>) => {
+      React.useImperativeHandle(ref, () => ({
+        flyTo: jest.fn(),
+        zoomIn: jest.fn().mockResolvedValue(undefined),
+        zoomOut: jest.fn().mockResolvedValue(undefined),
+      }))
+      return null
+    }),
+  }
+})
 
 jest.mock("@/theme/context", () => ({
   useAppTheme: jest.fn().mockReturnValue({
@@ -38,6 +54,7 @@ describe("MapScreen", () => {
   beforeEach(() => {
     jest.clearAllMocks()
     mockUseAuth.mockReturnValue({ user: null, appUser: null, signOut: jest.fn() })
+    mockFetchPublicStreamsByEntity.mockResolvedValue([])
   })
 
   it("shows location error toast when getCurrentPositionAsync throws during initial permission request", async () => {
