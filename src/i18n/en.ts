@@ -47,6 +47,12 @@ const en = {
     retry: "Retry",
     locationError: "Could not get your location. Please try again.",
   },
+  userProfileScreen: {
+    title: "Profile",
+    bio: "Bio",
+    noBio: "No bio yet.",
+    viewProfile: "View profile for {{username}}",
+  },
 }
 
 export default en

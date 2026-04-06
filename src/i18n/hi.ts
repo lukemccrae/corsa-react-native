@@ -49,6 +49,12 @@ const hi: Translations = {
     retry: "Retry",
     locationError: "Could not get your location. Please try again.",
   },
+  userProfileScreen: {
+    title: "प्रोफ़ाइल",
+    bio: "जीवनी",
+    noBio: "अभी तक कोई जीवनी नहीं।",
+    viewProfile: "{{username}} की प्रोफ़ाइल देखें",
+  },
 }
 
 export default hi

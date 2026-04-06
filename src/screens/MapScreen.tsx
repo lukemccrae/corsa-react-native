@@ -4,6 +4,7 @@ import {
   ImageStyle,
   Linking,
   Platform,
+  Pressable,
   StyleSheet,
   TextStyle,
   View,
@@ -84,7 +85,12 @@ export const MapScreen: FC = function MapScreen() {
       />
 
       {user && appUser ? (
-        <View style={themed($profileBadge)}>
+        <Pressable
+          style={themed($profileBadge)}
+          onPress={() => router.push(`/(app)/user/${displayUsername}`)}
+          accessibilityRole="button"
+          accessibilityLabel={`View profile for ${displayUsername}`}
+        >
           {profilePictureUri ? (
             <Image source={{ uri: profilePictureUri }} style={themed($avatar)} />
           ) : (
@@ -93,7 +99,7 @@ export const MapScreen: FC = function MapScreen() {
           {displayUsername ? (
             <Text text={displayUsername} size="xs" numberOfLines={1} style={themed($profileName)} />
           ) : null}
-        </View>
+        </Pressable>
       ) : null}
 
       {/* Overlay buttons */}

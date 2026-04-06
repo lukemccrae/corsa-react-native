@@ -50,6 +50,12 @@ const es: Translations = {
     retry: "Retry",
     locationError: "Could not get your location. Please try again.",
   },
+  userProfileScreen: {
+    title: "Perfil",
+    bio: "Biografía",
+    noBio: "Sin biografía todavía.",
+    viewProfile: "Ver perfil de {{username}}",
+  },
 }
 
 export default es

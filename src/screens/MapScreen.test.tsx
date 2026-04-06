@@ -1,4 +1,4 @@
-import { act, render } from "@testing-library/react-native"
+import { act, fireEvent, render } from "@testing-library/react-native"
 import * as Location from "expo-location"
 
 import { MapScreen } from "./MapScreen"
@@ -14,12 +14,14 @@ jest.mock("expo-location", () => ({
   getCurrentPositionAsync: jest.fn(),
 }))
 
+const mockPush = jest.fn()
 jest.mock("expo-router", () => ({
-  useRouter: () => ({ push: jest.fn() }),
+  useRouter: () => ({ push: mockPush }),
 }))
 
+const mockUseAuth = jest.fn()
 jest.mock("@/providers/AuthProvider", () => ({
-  useAuth: () => ({ user: null, signOut: jest.fn() }),
+  useAuth: () => mockUseAuth(),
 }))
 
 jest.mock("@/components/Map/MapLibreMap", () => ({
@@ -35,6 +37,7 @@ jest.mock("@/theme/context", () => ({
 describe("MapScreen", () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    mockUseAuth.mockReturnValue({ user: null, appUser: null, signOut: jest.fn() })
   })
 
   it("shows location error toast when getCurrentPositionAsync throws during initial permission request", async () => {
@@ -73,5 +76,38 @@ describe("MapScreen", () => {
     const { findByText } = render(<MapScreen />)
 
     await findByText("mapScreen:locationPermissionDenied")
+  })
+
+  it("renders profile badge with username when user and appUser are present", async () => {
+    mockUseAuth.mockReturnValue({
+      user: { uid: "user123" },
+      appUser: { username: "testuser", profilePicture: "" },
+      signOut: jest.fn(),
+    })
+    ;(Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({
+      status: "undetermined",
+    })
+
+    const { findByText } = render(<MapScreen />)
+    await findByText("testuser")
+  })
+
+  it("navigates to user profile when profile badge is pressed", async () => {
+    mockUseAuth.mockReturnValue({
+      user: { uid: "user123" },
+      appUser: { username: "testuser", profilePicture: "" },
+      signOut: jest.fn(),
+    })
+    ;(Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({
+      status: "undetermined",
+    })
+
+    const { getByLabelText } = render(<MapScreen />)
+    await act(async () => {})
+
+    const badge = getByLabelText("View profile for testuser")
+    fireEvent.press(badge)
+
+    expect(mockPush).toHaveBeenCalledWith("/(app)/user/testuser")
   })
 })
