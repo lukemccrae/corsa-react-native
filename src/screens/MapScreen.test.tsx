@@ -57,7 +57,7 @@ describe("MapScreen", () => {
     mockFetchPublicStreamsByEntity.mockResolvedValue([])
   })
 
-  it("shows location error toast when getCurrentPositionAsync throws during initial permission request", async () => {
+  it("does not fetch current location during initial permission request", async () => {
     ;(Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({
       status: "granted",
     })
@@ -65,10 +65,11 @@ describe("MapScreen", () => {
       new Error("Current location is unavailable. Make sure that location services are enabled"),
     )
 
-    const { findByText } = render(<MapScreen />)
+    const { queryByText } = render(<MapScreen />)
+    await act(async () => {})
 
-    // Error toast should appear after the rejected location request
-    await findByText("mapScreen:locationError")
+    expect(Location.getCurrentPositionAsync).not.toHaveBeenCalled()
+    expect(queryByText("mapScreen:locationError")).toBeNull()
   })
 
   it("does not show location error toast when location is successfully obtained", async () => {
@@ -126,5 +127,20 @@ describe("MapScreen", () => {
     fireEvent.press(badge)
 
     expect(mockPush).toHaveBeenCalledWith("/(app)/user/testuser")
+  })
+
+  it("navigates to sign-in when logged-out profile slot button is pressed", async () => {
+    mockUseAuth.mockReturnValue({ user: null, appUser: null, signOut: jest.fn() })
+    ;(Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({
+      status: "undetermined",
+    })
+
+    const { getByLabelText } = render(<MapScreen />)
+    await act(async () => {})
+
+    const signInButton = getByLabelText("mapScreen:signIn")
+    fireEvent.press(signInButton)
+
+    expect(mockPush).toHaveBeenCalledWith("/(auth)/sign-in")
   })
 })

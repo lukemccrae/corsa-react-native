@@ -33,7 +33,25 @@
     "supportsTablet": true,
     "bundleIdentifier": "com.corsanative",
     "infoPlist": {
-      "NSLocationWhenInUseUsageDescription": "$(PRODUCT_NAME) uses your location to show it on the map."
+      "NSLocationWhenInUseUsageDescription": "$(PRODUCT_NAME) uses your location to show it on the map.",
+      "CFBundleURLTypes": [
+        {
+          "CFBundleURLSchemes": [
+            "com.googleusercontent.apps.183920355653-qblr7kj8n29a3nlcn9s197gpfgeesgsh"
+          ]
+        }
+      ],
+      "ITSAppUsesNonExemptEncryption": false
+    },
+    "privacyManifests": {
+      "NSPrivacyAccessedAPITypes": [
+        {
+          "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+          "NSPrivacyAccessedAPITypeReasons": [
+            "CA92.1"
+          ]
+        }
+      ]
     }
   },
   "web": {
@@ -72,6 +90,19 @@
   "extra": {
     "ignite": {
       "version": "11.4.0"
+    },
+    "firebaseApiKey": "AIzaSyCIvoY1WDwgeYHOcNePJH6DQGkrkloR3xQ",
+    "firebaseAuthDomain": "corsa-auth.firebaseapp.com",
+    "firebaseProjectId": "corsa-auth",
+    "firebaseStorageBucket": "corsa-auth.firebasestorage.app",
+    "firebaseMessagingSenderId": "183920355653",
+    "firebaseAppId": "1:183920355653:web:a17e12aa4fa2b2c3cef62c",
+    "googleWebClientId": "183920355653-8t19bfg5julagtddgsh328jfub6d2lqq.apps.googleusercontent.com",
+    "googleIosClientId": "183920355653-qblr7kj8n29a3nlcn9s197gpfgeesgsh.apps.googleusercontent.com",
+    "googleAndroidClientId": "your-android-client-id.apps.googleusercontent.com",
+    "router": {},
+    "eas": {
+      "projectId": "a58a9023-b4f7-47ab-aa4d-b453e3d89c43"
     }
   }
 }

@@ -76,7 +76,7 @@ export const MapScreen: FC = function MapScreen() {
   const mapRef = useRef<MapLibreMapRef>(null)
 
   const [permissionStatus, setPermissionStatus] = useState<Location.PermissionStatus | null>(null)
-  const [locationError, setLocationError] = useState(false)
+  const [locationError] = useState(false)
   const [socialStreams, setSocialStreams] = useState<LiveStream[]>([])
   const [socialLoading, setSocialLoading] = useState(true)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -84,19 +84,6 @@ export const MapScreen: FC = function MapScreen() {
   const requestPermission = useCallback(async () => {
     const { status } = await Location.requestForegroundPermissionsAsync()
     setPermissionStatus(status)
-
-    if (status === Location.PermissionStatus.GRANTED) {
-      try {
-        const location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        })
-        // MapLibre uses [longitude, latitude] (GeoJSON) coordinate ordering.
-        mapRef.current?.flyTo(location.coords.longitude, location.coords.latitude)
-      } catch (error) {
-        if (__DEV__) console.warn("Location unavailable on startup:", error)
-        setLocationError(true)
-      }
-    }
   }, [])
 
   useEffect(() => {
@@ -157,7 +144,6 @@ export const MapScreen: FC = function MapScreen() {
   )
 
   useEffect(() => {
-    if (permissionStatus === Location.PermissionStatus.GRANTED) return
     if (!streamMarkers.length) return
 
     const firstLiveMarker = streamMarkers.find((marker) => marker.isLive)
@@ -165,21 +151,6 @@ export const MapScreen: FC = function MapScreen() {
 
     mapRef.current?.flyTo(markerToCenter.longitude, markerToCenter.latitude, 500, 3.5)
   }, [permissionStatus, streamMarkers])
-
-  const handleCenterOnMe = useCallback(async () => {
-    if (permissionStatus !== Location.PermissionStatus.GRANTED) return
-    setLocationError(false)
-    try {
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      })
-      // MapLibre uses [longitude, latitude] (GeoJSON) coordinate ordering.
-      mapRef.current?.flyTo(location.coords.longitude, location.coords.latitude, 500)
-    } catch (error) {
-      if (__DEV__) console.warn("Location unavailable on center-on-me:", error)
-      setLocationError(true)
-    }
-  }, [permissionStatus])
 
   const handleOpenSettings = useCallback(() => {
     if (Platform.OS === "ios") {
@@ -217,11 +188,18 @@ export const MapScreen: FC = function MapScreen() {
     void mapRef.current?.zoomOut()
   }, [])
 
+  const defaultInitialCenter = useMemo(
+    () => ({ latitude: 39.8283, longitude: -98.5795 }),
+    [],
+  )
+
   return (
     <View style={styles.container}>
       <MapLibreMap
         ref={mapRef}
-        showUserLocation={permissionStatus === Location.PermissionStatus.GRANTED}
+        showUserLocation={false}
+        initialCenter={defaultInitialCenter}
+        initialZoomLevel={3}
         markers={streamMarkers}
         onMarkerPress={(marker) => {
           const stream = socialStreams.find((entry) => entry.streamId === marker.id)
@@ -318,7 +296,16 @@ export const MapScreen: FC = function MapScreen() {
             <Text text={displayUsername} size="xs" numberOfLines={1} style={themed($profileName)} />
           ) : null}
         </Pressable>
-      ) : null}
+      ) : (
+        <Pressable
+          style={themed($profileBadge)}
+          onPress={() => router.push("/(auth)/sign-in")}
+          accessibilityRole="button"
+          accessibilityLabel={translate("mapScreen:signIn")}
+        >
+          <Text tx="mapScreen:signIn" size="xs" weight="medium" style={themed($profileName)} />
+        </Pressable>
+      )}
 
       <View style={themed($zoomControls)}>
         <Pressable
@@ -341,13 +328,6 @@ export const MapScreen: FC = function MapScreen() {
 
       {/* Overlay buttons */}
       <View style={themed($buttonContainer)}>
-        <Button
-          tx="mapScreen:centerOnMe"
-          preset="reversed"
-          onPress={handleCenterOnMe}
-          style={themed($mapButton)}
-          disabled={permissionStatus !== Location.PermissionStatus.GRANTED}
-        />
         {user ? (
           <Button
             tx="mapScreen:signOut"
@@ -355,14 +335,7 @@ export const MapScreen: FC = function MapScreen() {
             onPress={signOut}
             style={themed($mapButton)}
           />
-        ) : (
-          <Button
-            tx="mapScreen:signIn"
-            preset="default"
-            onPress={() => router.push("/(auth)/sign-in")}
-            style={themed($mapButton)}
-          />
-        )}
+        ) : null}
       </View>
 
       {/* Permission denied banner */}
