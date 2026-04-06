@@ -1,6 +1,7 @@
-import { forwardRef, useImperativeHandle, useRef } from "react"
+import { forwardRef, useImperativeHandle, useMemo, useRef } from "react"
 import { Image, Pressable, StyleSheet, View } from "react-native"
 import MapLibreGL, { CameraRef, MapViewRef } from "@maplibre/maplibre-react-native"
+import type { Feature, FeatureCollection, LineString, Point } from "geojson"
 
 // OpenStreetMap raster tile style — no API key required.
 // NOTE: The public OSM tile server (tile.openstreetmap.org) has a usage policy and is
@@ -30,6 +31,17 @@ interface MapLibreMapProps {
   showUserLocation?: boolean
   markers?: SocialMapMarker[]
   onMarkerPress?: (marker: SocialMapMarker) => void
+  trackCoordinates?: MapCoordinate[]
+  waypointMarkers?: StreamWaypointMarker[]
+  postMarkers?: StreamPostMarker[]
+  currentLocationMarker?: MapCoordinate | null
+  initialCenter?: MapCoordinate
+  initialZoomLevel?: number
+}
+
+export interface MapCoordinate {
+  latitude: number
+  longitude: number
 }
 
 export interface SocialMapMarker {
@@ -42,16 +54,69 @@ export interface SocialMapMarker {
   isLive: boolean
 }
 
+export interface StreamWaypointMarker extends MapCoordinate {
+  id: string
+}
+
+export interface StreamPostMarker extends MapCoordinate {
+  id: string
+  title: string
+}
+
 /**
  * A full-screen MapLibre map backed by OpenFreeMap vector tiles.
  * Exposes `flyTo` via a forwarded ref for programmatic camera control.
  */
 export const MapLibreMap = forwardRef<MapLibreMapRef, MapLibreMapProps>(function MapLibreMap(
-  { showUserLocation = false, markers = [], onMarkerPress },
+  {
+    showUserLocation = false,
+    markers = [],
+    onMarkerPress,
+    trackCoordinates = [],
+    waypointMarkers = [],
+    postMarkers = [],
+    currentLocationMarker = null,
+    initialCenter,
+    initialZoomLevel = 2,
+  },
   ref,
 ) {
   const cameraRef = useRef<CameraRef>(null)
   const mapViewRef = useRef<MapViewRef>(null)
+
+  const trackShape = useMemo<FeatureCollection<LineString> | null>(() => {
+    if (trackCoordinates.length < 2) return null
+
+    return {
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          properties: {},
+          geometry: {
+            type: "LineString",
+            coordinates: trackCoordinates.map((coordinate) => [coordinate.longitude, coordinate.latitude]),
+          },
+        },
+      ],
+    }
+  }, [trackCoordinates])
+
+  const waypointShape = useMemo<FeatureCollection<Point> | null>(() => {
+    if (waypointMarkers.length === 0) return null
+
+    return {
+      type: "FeatureCollection",
+      features: waypointMarkers.map<Feature<Point>>((marker) => ({
+        type: "Feature",
+        properties: { id: marker.id },
+        geometry: {
+          type: "Point",
+          coordinates: [marker.longitude, marker.latitude],
+        },
+      })),
+    }
+  }, [waypointMarkers])
 
   useImperativeHandle(
     ref,
@@ -98,7 +163,10 @@ export const MapLibreMap = forwardRef<MapLibreMapRef, MapLibreMapProps>(function
     >
       <MapLibreGL.Camera
         ref={cameraRef}
-        zoomLevel={2}
+        zoomLevel={initialZoomLevel}
+        centerCoordinate={
+          initialCenter ? [initialCenter.longitude, initialCenter.latitude] : undefined
+        }
         minZoomLevel={1}
         maxZoomLevel={18}
         animationDuration={0}
@@ -106,6 +174,40 @@ export const MapLibreMap = forwardRef<MapLibreMapRef, MapLibreMapProps>(function
       {/* animated={false} avoids AnimatedPoint creation which crashes on RN 0.83
           due to AnimatedNode._listeners changing from plain object to Map. */}
       {showUserLocation && <MapLibreGL.UserLocation visible animated={false} />}
+
+      {trackShape ? (
+        <MapLibreGL.ShapeSource id="stream-track" shape={trackShape}>
+          <MapLibreGL.LineLayer id="stream-track-line" style={styles.trackLine} />
+        </MapLibreGL.ShapeSource>
+      ) : null}
+
+      {waypointShape ? (
+        <MapLibreGL.ShapeSource id="stream-waypoints" shape={waypointShape}>
+          <MapLibreGL.CircleLayer id="stream-waypoint-circles" style={styles.waypointCircle} />
+        </MapLibreGL.ShapeSource>
+      ) : null}
+
+      {currentLocationMarker ? (
+        <MapLibreGL.MarkerView
+          key="stream-current-location"
+          coordinate={[currentLocationMarker.longitude, currentLocationMarker.latitude]}
+          allowOverlap={true}
+          anchor={{ x: 0.5, y: 0.5 }}
+        >
+          <View style={styles.currentLocationMarker} />
+        </MapLibreGL.MarkerView>
+      ) : null}
+
+      {postMarkers.map((marker) => (
+        <MapLibreGL.MarkerView
+          key={marker.id}
+          coordinate={[marker.longitude, marker.latitude]}
+          allowOverlap={true}
+          anchor={{ x: 0.5, y: 0.5 }}
+        >
+          <View accessibilityLabel={marker.title} style={styles.postMarker} />
+        </MapLibreGL.MarkerView>
+      ))}
 
       {markers.map((marker) => (
         <MapLibreGL.MarkerView
@@ -136,6 +238,36 @@ export const MapLibreMap = forwardRef<MapLibreMapRef, MapLibreMapProps>(function
 const styles = StyleSheet.create({
   map: {
     flex: 1,
+  },
+  trackLine: {
+    lineColor: "#0f172a",
+    lineWidth: 4,
+    lineOpacity: 0.9,
+    lineCap: "round",
+    lineJoin: "round",
+  },
+  waypointCircle: {
+    circleRadius: 3,
+    circleColor: "#f8fafc",
+    circleStrokeWidth: 1.5,
+    circleStrokeColor: "#0f172a",
+    circleOpacity: 0.95,
+  },
+  currentLocationMarker: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "#2563eb",
+    borderWidth: 3,
+    borderColor: "#ffffff",
+  },
+  postMarker: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "#f97316",
+    borderWidth: 2,
+    borderColor: "#ffffff",
   },
   markerPressable: {
     width: 42,

@@ -153,6 +153,42 @@ const GET_USER_STREAM_BY_ID = `
           storagePath
           uom
         }
+        waypoints {
+          altitude
+          lat
+          lng
+          mileMarker
+          pointIndex
+          private
+          streamId
+          timestamp
+        }
+        posts {
+          __typename
+          createdAt
+          type
+          userId
+          location {
+            lat
+            lng
+          }
+          ... on StatusPost {
+            text
+            imagePath
+            media {
+              path
+              type
+              contentType
+            }
+          }
+          ... on PhotoPost {
+            text
+            images
+          }
+          ... on LivestreamPost {
+            text
+          }
+        }
         chatMessages {
           text
           createdAt

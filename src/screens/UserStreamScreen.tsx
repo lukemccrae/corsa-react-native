@@ -2,10 +2,16 @@ import { FC, useEffect, useMemo, useState } from "react"
 import { ActivityIndicator, Image, ImageStyle, TextStyle, View, ViewStyle } from "react-native"
 import { useRouter } from "expo-router"
 
-import type { ChatMessage, LiveStream, User } from "@/generated/schema"
+import {
+  MapLibreMap,
+  type MapCoordinate,
+  type StreamPostMarker,
+  type StreamWaypointMarker,
+} from "@/components/Map/MapLibreMap"
 import { Button } from "@/components/Button"
 import { Screen } from "@/components/Screen"
 import { Text } from "@/components/Text"
+import type { ChatMessage, LiveStream, Post, User, Waypoint } from "@/generated/schema"
 import { fetchUserStreamById } from "@/services/api/graphql"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
@@ -37,12 +43,105 @@ function getStatus(stream: LiveStream) {
   return "Finished"
 }
 
+type StreamPostEntry = Post & {
+  __typename?: string
+  text?: string | null
+  imagePath?: string | null
+  images?: Array<string | null> | null
+  media?: Array<{ path: string } | null> | null
+}
+
+function hasCoordinate(value: number | null | undefined): value is number {
+  return Number.isFinite(value)
+}
+
+function toMapCoordinate(latitude: number | null | undefined, longitude: number | null | undefined) {
+  if (!hasCoordinate(latitude) || !hasCoordinate(longitude)) return null
+
+  return { latitude, longitude }
+}
+
+function formatCoordinateLabel(latitude: number, longitude: number) {
+  return `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`
+}
+
+function getPostText(post: StreamPostEntry) {
+  return post.text?.trim() || "Shared an update from the route."
+}
+
+function getPostMediaLabel(post: StreamPostEntry) {
+  const photoCount = post.images?.filter(Boolean).length ?? 0
+  const mediaCount = post.media?.filter(Boolean).length ?? 0
+
+  if (photoCount > 0) return `${photoCount} photo${photoCount === 1 ? "" : "s"}`
+  if (mediaCount > 0) return `${mediaCount} attachment${mediaCount === 1 ? "" : "s"}`
+  if (post.imagePath) return "1 photo"
+
+  return null
+}
+
+function getInitialZoomLevel(points: MapCoordinate[]) {
+  if (points.length <= 1) return 11
+
+  const latitudes = points.map((point) => point.latitude)
+  const longitudes = points.map((point) => point.longitude)
+  const span = Math.max(
+    Math.max(...latitudes) - Math.min(...latitudes),
+    Math.max(...longitudes) - Math.min(...longitudes),
+  )
+
+  if (span <= 0.02) return 12
+  if (span <= 0.08) return 10.5
+  if (span <= 0.3) return 9
+  if (span <= 1) return 7
+  if (span <= 3) return 5.5
+  if (span <= 10) return 4.5
+
+  return 3
+}
+
+function getInitialCenter(points: MapCoordinate[]) {
+  if (points.length === 0) return null
+
+  const latitudes = points.map((point) => point.latitude)
+  const longitudes = points.map((point) => point.longitude)
+
+  return {
+    latitude: (Math.min(...latitudes) + Math.max(...latitudes)) / 2,
+    longitude: (Math.min(...longitudes) + Math.max(...longitudes)) / 2,
+  }
+}
+
 function ChatMessageItem({ message }: { message: ChatMessage }) {
   return (
     <View style={$chatCard}>
       <Text text={message.publicUser?.username || "Supporter"} weight="medium" size="xs" />
       <Text text={message.text || ""} size="xs" style={$chatText} />
       <Text text={formatDateTime(message.createdAt) || ""} size="xxs" style={$chatMeta} />
+    </View>
+  )
+}
+
+function PostCard({ post }: { post: StreamPostEntry }) {
+  const latitude = post.location?.lat
+  const longitude = post.location?.lng
+  const coordinateLabel =
+    hasCoordinate(latitude) && hasCoordinate(longitude)
+      ? formatCoordinateLabel(latitude, longitude)
+      : null
+  const mediaLabel = getPostMediaLabel(post)
+
+  return (
+    <View style={$postCard}>
+      <View style={$postHeader}>
+        <Text text={post.type} weight="medium" size="xs" />
+        <Text text={formatDateTime(post.createdAt) || ""} size="xxs" style={$postMeta} />
+      </View>
+      <Text text={getPostText(post)} size="xs" style={$postText} />
+      <View style={$postFooter}>
+        {coordinateLabel ? <Text text={`Pinned to map • ${coordinateLabel}`} size="xxs" style={$postMeta} /> : null}
+        {mediaLabel ? <Text text={mediaLabel} size="xxs" style={$postMeta} /> : null}
+      </View>
     </View>
   )
 }
@@ -86,6 +185,77 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
     () => (stream?.chatMessages ?? []).filter((message): message is ChatMessage => Boolean(message)),
     [stream],
   )
+
+  const publicWaypoints = useMemo(
+    () =>
+      (stream?.waypoints ?? [])
+        .filter((waypoint): waypoint is Waypoint => Boolean(waypoint) && waypoint.private !== true)
+        .sort((left, right) => new Date(left.timestamp).getTime() - new Date(right.timestamp).getTime()),
+    [stream],
+  )
+
+  const posts = useMemo(
+    () =>
+      (stream?.posts ?? [])
+        .filter((post): post is StreamPostEntry => Boolean(post))
+        .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()),
+    [stream],
+  )
+
+  const trackCoordinates = useMemo<MapCoordinate[]>(
+    () =>
+      publicWaypoints.map((waypoint) => ({
+        latitude: waypoint.lat,
+        longitude: waypoint.lng,
+      })),
+    [publicWaypoints],
+  )
+
+  const waypointMarkers = useMemo<StreamWaypointMarker[]>(
+    () =>
+      publicWaypoints.map((waypoint, index) => ({
+        id: `${waypoint.streamId}-${waypoint.pointIndex ?? index}`,
+        latitude: waypoint.lat,
+        longitude: waypoint.lng,
+      })),
+    [publicWaypoints],
+  )
+
+  const postMarkers = useMemo<StreamPostMarker[]>(
+    () =>
+      posts.flatMap((post) => {
+        const coordinate = toMapCoordinate(post.location?.lat, post.location?.lng)
+        if (!coordinate) return []
+
+        return [
+          {
+            id: `${post.userId}-${post.createdAt}`,
+            title: getPostText(post),
+            latitude: coordinate.latitude,
+            longitude: coordinate.longitude,
+          },
+        ]
+      }),
+    [posts],
+  )
+
+  const currentLocationMarker = useMemo(
+    () => toMapCoordinate(stream?.currentLocation?.lat, stream?.currentLocation?.lng),
+    [stream],
+  )
+
+  const mapPoints = useMemo(
+    () => [
+      ...trackCoordinates,
+      ...postMarkers.map((marker) => ({ latitude: marker.latitude, longitude: marker.longitude })),
+      ...(currentLocationMarker ? [currentLocationMarker] : []),
+    ],
+    [currentLocationMarker, postMarkers, trackCoordinates],
+  )
+
+  const initialCenter = useMemo(() => getInitialCenter(mapPoints), [mapPoints])
+  const initialZoomLevel = useMemo(() => getInitialZoomLevel(mapPoints), [mapPoints])
+  const hasMapData = mapPoints.length > 0
 
   return (
     <Screen preset="scroll" contentContainerStyle={themed($screenContainer)}>
@@ -161,7 +331,72 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
           </View>
 
           <View style={themed($section)}>
-            <Text text="Chat" preset="subheading" size="sm" />
+            <View style={themed($sectionHeader)}>
+              <Text text="Map activity" preset="subheading" size="sm" />
+              <Text
+                text={`${publicWaypoints.length} points • ${postMarkers.length} posts`}
+                size="xxs"
+                style={themed($subtleText)}
+              />
+            </View>
+
+            {hasMapData ? (
+              <View style={themed($mapCard)}>
+                <View style={themed($mapFrame)}>
+                  <MapLibreMap
+                    initialCenter={initialCenter ?? undefined}
+                    initialZoomLevel={initialZoomLevel}
+                    trackCoordinates={trackCoordinates}
+                    waypointMarkers={waypointMarkers}
+                    postMarkers={postMarkers}
+                    currentLocationMarker={currentLocationMarker}
+                  />
+                </View>
+                <View style={themed($mapLegend)}>
+                  <View style={themed($legendItem)}>
+                    <View style={themed($legendSwatchTrack)} />
+                    <Text text="Track points" size="xxs" />
+                  </View>
+                  <View style={themed($legendItem)}>
+                    <View style={themed($legendSwatchPost)} />
+                    <Text text="Posts" size="xxs" />
+                  </View>
+                  {currentLocationMarker ? (
+                    <View style={themed($legendItem)}>
+                      <View style={themed($legendSwatchCurrent)} />
+                      <Text text="Current location" size="xxs" />
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+            ) : (
+              <View style={themed($emptyCard)}>
+                <Text text="No waypoint or post locations are available for this stream yet." size="xs" />
+              </View>
+            )}
+          </View>
+
+          <View style={themed($section)}>
+            <View style={themed($sectionHeader)}>
+              <Text text="Posts" preset="subheading" size="sm" />
+              <Text text={`${posts.length} updates`} size="xxs" style={themed($subtleText)} />
+            </View>
+            {posts.length === 0 ? (
+              <Text text="No posts yet." size="xs" style={themed($subtleText)} />
+            ) : (
+              <View style={themed($postList)}>
+                {posts.map((post) => (
+                  <PostCard key={`${post.userId}-${post.createdAt}`} post={post} />
+                ))}
+              </View>
+            )}
+          </View>
+
+          <View style={themed($section)}>
+            <View style={themed($sectionHeader)}>
+              <Text text="Chat" preset="subheading" size="sm" />
+              <Text text={`${chatMessages.length} messages`} size="xxs" style={themed($subtleText)} />
+            </View>
             {chatMessages.length === 0 ? (
               <Text text="No chat messages yet." size="xs" style={themed($subtleText)} />
             ) : (
@@ -193,6 +428,36 @@ const $chatText: TextStyle = {
 
 const $chatMeta: TextStyle = {
   color: "#5B6472",
+}
+
+const $postCard: ViewStyle = {
+  borderWidth: 1,
+  borderColor: "#D4D7DD",
+  borderRadius: 14,
+  padding: 14,
+  gap: 8,
+  backgroundColor: "#FFFFFF",
+}
+
+const $postHeader: ViewStyle = {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+}
+
+const $postText: TextStyle = {
+  color: "#212731",
+}
+
+const $postMeta: TextStyle = {
+  color: "#5B6472",
+}
+
+const $postFooter: ViewStyle = {
+  flexDirection: "row",
+  flexWrap: "wrap",
+  gap: 12,
 }
 
 const $screenContainer: ThemedStyle<ViewStyle> = ({ spacing }) => ({
@@ -281,7 +546,74 @@ const $section: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   gap: spacing.sm,
 })
 
+const $sectionHeader: ThemedStyle<ViewStyle> = () => ({
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+})
+
+const $mapCard: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
+  gap: spacing.sm,
+  borderWidth: 1,
+  borderColor: colors.palette.neutral300,
+  borderRadius: 20,
+  padding: spacing.sm,
+  backgroundColor: colors.background,
+})
+
+const $mapFrame: ThemedStyle<ViewStyle> = () => ({
+  height: 320,
+  overflow: "hidden",
+  borderRadius: 16,
+})
+
+const $mapLegend: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  flexDirection: "row",
+  flexWrap: "wrap",
+  gap: spacing.md,
+})
+
+const $legendItem: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  flexDirection: "row",
+  alignItems: "center",
+  gap: spacing.xxs,
+})
+
+const $legendSwatchTrack: ThemedStyle<ViewStyle> = () => ({
+  width: 10,
+  height: 10,
+  borderRadius: 5,
+  backgroundColor: "#0f172a",
+})
+
+const $legendSwatchPost: ThemedStyle<ViewStyle> = () => ({
+  width: 10,
+  height: 10,
+  borderRadius: 5,
+  backgroundColor: "#f97316",
+})
+
+const $legendSwatchCurrent: ThemedStyle<ViewStyle> = () => ({
+  width: 10,
+  height: 10,
+  borderRadius: 5,
+  backgroundColor: "#2563eb",
+})
+
+const $emptyCard: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
+  borderWidth: 1,
+  borderColor: colors.palette.neutral300,
+  borderRadius: 16,
+  padding: spacing.md,
+  backgroundColor: colors.background,
+})
+
 const $chatList: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  gap: spacing.sm,
+})
+
+const $postList: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   gap: spacing.sm,
 })
 
