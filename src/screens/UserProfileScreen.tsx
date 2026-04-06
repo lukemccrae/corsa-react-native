@@ -49,7 +49,7 @@ export const UserProfileScreen: FC<UserProfileScreenProps> = function UserProfil
         <View style={themed($bioSection)}>
           <Text tx="userProfileScreen:bio" preset="formLabel" style={themed($bioLabel)} />
           <Text
-            text={bio ?? undefined}
+            text={bio || undefined}
             tx={bio ? undefined : "userProfileScreen:noBio"}
             style={themed($bioText)}
           />
