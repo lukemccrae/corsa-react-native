@@ -31,6 +31,7 @@ EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=your_google_web_client_id.apps.googleuserconten
 EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=your_google_ios_client_id.apps.googleusercontent.com
 EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=your_google_android_client_id.apps.googleusercontent.com
 EXPO_PUBLIC_CLOUDFRONT_PHOTO_URL=https://your-cloudfront-distribution.cloudfront.net
+EXPO_PUBLIC_GEOJSON_CDN_BASE_URL=https://your-geojson-cloudfront-distribution.cloudfront.net
 
 # AppSync (runtime GraphQL fetches from the mobile app)
 EXPO_PUBLIC_APPSYNC_API_KEY=your_appsync_api_key

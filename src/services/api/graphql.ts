@@ -32,6 +32,8 @@ const appSyncApiKey =
   process.env.EXPO_PUBLIC_APPSYNC_API_KEY ?? process.env.APPSYNC_API_KEY ?? ""
 
 const cloudFrontPhotoUrl = process.env.EXPO_PUBLIC_CLOUDFRONT_PHOTO_URL ?? ""
+const geoJsonCdnBaseUrl =
+  process.env.EXPO_PUBLIC_GEOJSON_CDN_BASE_URL ?? "https://d2mg2mxj6r88wt.cloudfront.net"
 
 const GET_USER_BY_USER_ID = `
   query GetUserByUserId($userId: ID!) {
@@ -281,6 +283,16 @@ function resolveCloudFrontUrl(path: string | null | undefined): string {
   return `${normalizedBaseUrl}${normalizedPath}`
 }
 
+function resolveGeoJsonUrl(path: string | null | undefined): string {
+  if (!path) return ""
+  if (/^https?:\/\//i.test(path)) return path
+
+  const normalizedBaseUrl = geoJsonCdnBaseUrl.replace(/\/+$/, "")
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`
+
+  return `${normalizedBaseUrl}${normalizedPath}`
+}
+
 function normalizeUserImagePaths(user: User): User {
   return {
     ...user,
@@ -303,8 +315,8 @@ function normalizeRoute(route: Route | null): Route | null {
 
   return {
     ...route,
-    overlayPath: resolveCloudFrontUrl(route.overlayPath),
-    storagePath: resolveCloudFrontUrl(route.storagePath),
+    overlayPath: resolveGeoJsonUrl(route.overlayPath),
+    storagePath: resolveGeoJsonUrl(route.storagePath),
     publicUser: route.publicUser ? normalizePublicUserImagePaths(route.publicUser) : route.publicUser,
   }
 }
