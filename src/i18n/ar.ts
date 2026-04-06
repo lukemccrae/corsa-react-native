@@ -49,6 +49,13 @@ const ar: Translations = {
     retry: "Retry",
     locationError: "Could not get your location. Please try again.",
   },
+  profileMenu: {
+    routes: "المسارات",
+    devices: "الأجهزة",
+    streams: "البثوث",
+    myProfile: "ملفي الشخصي",
+    logOut: "تسجيل الخروج",
+  },
   userProfileScreen: {
     title: "الملف الشخصي",
     bio: "السيرة الذاتية",

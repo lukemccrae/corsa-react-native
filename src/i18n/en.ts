@@ -47,6 +47,12 @@ const en = {
     retry: "Retry",
     locationError: "Could not get your location. Please try again.",
   },
+  profileMenu: {
+    routes: "Routes",
+    devices: "Devices",
+    myProfile: "My Profile",
+    logOut: "Log out",
+  },
   userProfileScreen: {
     title: "Profile",
     bio: "Bio",
