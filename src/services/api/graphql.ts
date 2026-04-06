@@ -1,7 +1,11 @@
-import type { LiveStream, Route, User } from "@/generated/schema"
+import type { ChatMessage, LiveStream, Route, User } from "@/generated/schema"
 
 type GraphQLError = {
   message: string
+}
+
+type PublishChatResponse = {
+  publishChat?: ChatMessage | null
 }
 
 type GetUserByUserIdResponse = {
@@ -453,4 +457,84 @@ export async function fetchPublicStreamsByEntity(entity = "STREAM"): Promise<Liv
     .filter((stream): stream is LiveStream => Boolean(stream))
     .map((stream) => normalizeLiveStream(stream))
     .filter((stream): stream is LiveStream => Boolean(stream))
+}
+
+// ── Authenticated mutations ────────────────────────────────────────────────────
+
+const PUBLISH_CHAT_MUTATION = `
+  mutation PublishChat($input: ChatMessageInput!) {
+    publishChat(input: $input) {
+      text
+      createdAt
+      streamId
+      userId
+      publicUser {
+        username
+        profilePicture
+        userId
+      }
+    }
+  }
+`
+
+async function executeTokenMutation<TData>(
+  query: string,
+  variables: Record<string, unknown>,
+  idToken: string,
+): Promise<TData> {
+  if (!appSyncEndpoint) {
+    throw new Error("Missing EXPO_PUBLIC_APPSYNC_ENDPOINT")
+  }
+
+  const response = await fetch(appSyncEndpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${idToken}`,
+    },
+    body: JSON.stringify({ query, variables }),
+  })
+
+  if (!response.ok) {
+    throw new Error(`AppSync request failed with status ${response.status}`)
+  }
+
+  const result = (await response.json()) as {
+    data?: TData
+    errors?: GraphQLError[]
+  }
+
+  if (result.errors?.length) {
+    const joinedMessages = result.errors.map((error) => error.message).join(", ")
+    throw new Error(`GraphQL error: ${joinedMessages}`)
+  }
+
+  if (!result.data) {
+    throw new Error("Missing GraphQL response data")
+  }
+
+  return result.data
+}
+
+export type PublishChatInput = {
+  streamId: string
+  text: string
+  userId: string
+  username: string
+  profilePicture: string
+  createdAt: string
+}
+
+export async function publishChatMessage(
+  input: PublishChatInput,
+  idToken: string,
+): Promise<ChatMessage> {
+  const result = await executeTokenMutation<PublishChatResponse>(PUBLISH_CHAT_MUTATION, { input }, idToken)
+  if (!result.publishChat) {
+    throw new Error("publishChat returned no data")
+  }
+  return {
+    ...result.publishChat,
+    publicUser: normalizePublicUserImagePaths(result.publishChat.publicUser),
+  }
 }

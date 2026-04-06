@@ -307,6 +307,7 @@ export const UserRouteScreen: FC<UserRouteScreenProps> = function UserRouteScree
 
   // Location permission
   const [locationGranted, setLocationGranted] = useState(false)
+  const [currentLocation, setCurrentLocation] = useState<MapCoordinate | null>(null)
 
   // Fetch route metadata
   useEffect(() => {
@@ -373,12 +374,45 @@ export const UserRouteScreen: FC<UserRouteScreenProps> = function UserRouteScree
   // Request foreground location permission on mount
   useEffect(() => {
     let active = true
+    let locationSubscription: Location.LocationSubscription | null = null
     void (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync()
-      if (active) setLocationGranted(status === Location.PermissionStatus.GRANTED)
+      if (!active) return
+
+      const granted = status === Location.PermissionStatus.GRANTED
+      setLocationGranted(granted)
+
+      if (!granted) {
+        setCurrentLocation(null)
+        return
+      }
+
+      const initialPosition = await Location.getCurrentPositionAsync({})
+      if (active) {
+        setCurrentLocation({
+          latitude: initialPosition.coords.latitude,
+          longitude: initialPosition.coords.longitude,
+        })
+      }
+
+      locationSubscription = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.Balanced,
+          timeInterval: 5000,
+          distanceInterval: 10,
+        },
+        (position) => {
+          if (!active) return
+          setCurrentLocation({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          })
+        },
+      )
     })()
     return () => {
       active = false
+      locationSubscription?.remove()
     }
   }, [])
 
@@ -393,6 +427,11 @@ export const UserRouteScreen: FC<UserRouteScreenProps> = function UserRouteScree
     [scrubCoord],
   )
 
+  const activeMapMarker = useMemo<MapCoordinate | null>(
+    () => hoverMarker ?? currentLocation,
+    [currentLocation, hoverMarker],
+  )
+
   const handleScrub = useCallback((coord: ElevCoord | null) => {
     setScrubCoord(coord)
   }, [])
@@ -404,7 +443,7 @@ export const UserRouteScreen: FC<UserRouteScreenProps> = function UserRouteScree
           ref={mapRef}
           trackCoordinates={trackCoordinates}
           showUserLocation={locationGranted}
-          currentLocationMarker={hoverMarker}
+          currentLocationMarker={activeMapMarker}
           initialZoomLevel={3}
         />
 

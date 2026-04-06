@@ -1,5 +1,18 @@
-import { FC, useEffect, useMemo, useState } from "react"
-import { ActivityIndicator, Image, ImageStyle, TextStyle, View, ViewStyle } from "react-native"
+import { FC, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import {
+  ActivityIndicator,
+  Image,
+  ImageStyle,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  TextStyle,
+  View,
+  ViewStyle,
+} from "react-native"
 import { useRouter } from "expo-router"
 
 import {
@@ -12,9 +25,10 @@ import { Button } from "@/components/Button"
 import { Screen } from "@/components/Screen"
 import { Text } from "@/components/Text"
 import type { ChatMessage, LiveStream, Post, User, Waypoint } from "@/generated/schema"
-import { fetchUserStreamById } from "@/services/api/graphql"
+import { fetchUserStreamById, publishChatMessage } from "@/services/api/graphql"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
+import { useAuth } from "@/providers/AuthProvider"
 
 interface UserStreamScreenProps {
   username: string
@@ -113,11 +127,180 @@ function getInitialCenter(points: MapCoordinate[]) {
 }
 
 function ChatMessageItem({ message }: { message: ChatMessage }) {
+  const { themed } = useAppTheme()
   return (
-    <View style={$chatCard}>
-      <Text text={message.publicUser?.username || "Supporter"} weight="medium" size="xs" />
-      <Text text={message.text || ""} size="xs" style={$chatText} />
-      <Text text={formatDateTime(message.createdAt) || ""} size="xxs" style={$chatMeta} />
+    <View style={$chatRow}>
+      <View style={$chatAvatar}>
+        {message.publicUser?.profilePicture ? (
+          <Image source={{ uri: message.publicUser.profilePicture }} style={$chatAvatarImg} />
+        ) : (
+          <View style={themed($chatAvatarFallback)}>
+            <Text
+              text={(message.publicUser?.username ?? "?").charAt(0).toUpperCase()}
+              size="xxs"
+              weight="medium"
+              style={themed($chatAvatarFallbackText)}
+            />
+          </View>
+        )}
+      </View>
+      <View style={$chatBubble}>
+        <View style={$chatByline}>
+          <Text text={message.publicUser?.username ?? "Supporter"} weight="bold" size="xs" style={themed($chatUsername)} />
+          <Text text={formatDateTime(message.createdAt) ?? ""} size="xxs" style={themed($chatTimestamp)} />
+        </View>
+        <Text text={message.text ?? ""} size="xs" style={themed($chatMessageText)} />
+      </View>
+    </View>
+  )
+}
+
+type LiveChatSectionProps = {
+  streamId: string
+  messages: ChatMessage[]
+}
+
+function LiveChatSection({ streamId, messages: initialMessages }: LiveChatSectionProps) {
+  const { themed } = useAppTheme()
+  const { user, appUser } = useAuth()
+  const router = useRouter()
+  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
+  const [text, setText] = useState("")
+  const [sending, setSending] = useState(false)
+  const scrollRef = useRef<ScrollView>(null)
+
+  useEffect(() => {
+    setMessages(initialMessages)
+  }, [initialMessages])
+
+  useEffect(() => {
+    if (messages.length > 0) {
+      scrollRef.current?.scrollToEnd({ animated: true })
+    }
+  }, [messages])
+
+  const sendMessage = useCallback(async () => {
+    const trimmed = text.trim()
+    if (!trimmed || !user || !appUser) return
+
+    const optimisticCreatedAt = new Date().toISOString()
+    const optimistic: ChatMessage = {
+      text: trimmed,
+      createdAt: optimisticCreatedAt,
+      userId: appUser.userId,
+      streamId,
+      publicUser: {
+        username: appUser.username ?? "Me",
+        profilePicture: appUser.profilePicture ?? "",
+        userId: appUser.userId,
+      },
+    }
+
+    setSending(true)
+    setText("")
+    setMessages((prev) => [...prev, optimistic])
+
+    try {
+      const idToken = await user.getIdToken()
+      const saved = await publishChatMessage(
+        {
+          streamId,
+          text: trimmed,
+          userId: appUser.userId,
+          username: appUser.username ?? "Me",
+          profilePicture: appUser.profilePicture ?? "",
+          createdAt: optimisticCreatedAt,
+        },
+        idToken,
+      )
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.createdAt === optimisticCreatedAt && m.text === trimmed ? saved : m,
+        ),
+      )
+    } catch {
+      // rollback optimistic entry and restore text
+      setMessages((prev) =>
+        prev.filter((m) => !(m.createdAt === optimisticCreatedAt && m.text === trimmed)),
+      )
+      setText(trimmed)
+    } finally {
+      setSending(false)
+    }
+  }, [appUser, streamId, text, user])
+
+  return (
+    <View style={themed($chatCard)}>
+      <Text text="Live Chat" preset="subheading" size="sm" style={themed($chatHeading)} />
+
+      <ScrollView
+        ref={scrollRef}
+        style={$chatScrollArea}
+        contentContainerStyle={$chatScrollContent}
+        showsVerticalScrollIndicator={false}
+        onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
+      >
+        {messages.length === 0 ? (
+          <Text text="Be the first to say hi!" size="xs" style={themed($chatEmpty)} />
+        ) : (
+          messages.map((message) => (
+            <ChatMessageItem key={`${message.createdAt}:${message.userId}:${message.text}`} message={message} />
+          ))
+        )}
+      </ScrollView>
+
+      <View style={themed($chatFooter)}>
+        {user && appUser ? (
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+            <View style={$chatInputRow}>
+              <TextInput
+                style={themed($chatInput)}
+                value={text}
+                onChangeText={setText}
+                placeholder="Write a comment..."
+                placeholderTextColor="#64748b"
+                multiline
+                editable={!sending}
+                returnKeyType="send"
+                blurOnSubmit
+                onSubmitEditing={sendMessage}
+              />
+              <Pressable
+                onPress={sendMessage}
+                disabled={sending || !text.trim()}
+                style={({ pressed }) => [
+                  $sendButton,
+                  (sending || !text.trim()) && $sendButtonDisabled,
+                  pressed && $sendButtonPressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Send message"
+              >
+                {sending ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text text="Send" size="xs" weight="medium" style={$sendButtonText} />
+                )}
+              </Pressable>
+            </View>
+          </KeyboardAvoidingView>
+        ) : (
+          <View style={$guestRow}>
+            <Text
+              text="Sign in to post comments, interact with others, and stay updated."
+              size="xs"
+              style={themed($guestText)}
+            />
+            <Pressable
+              style={$signInButton}
+              onPress={() => router.push("/(auth)/login")}
+              accessibilityRole="button"
+            >
+              <Text text="Sign in" size="xs" weight="bold" style={$signInButtonText} />
+            </Pressable>
+          </View>
+        )}
+      </View>
     </View>
   )
 }
@@ -152,7 +335,7 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
 }) {
   const { themed } = useAppTheme()
   const router = useRouter()
-  const [user, setUser] = useState<User | null>(null)
+  const [routeUser, setRouteUser] = useState<User | null>(null)
   const [stream, setStream] = useState<LiveStream | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -165,7 +348,7 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
         const result = await fetchUserStreamById(username, streamId)
         if (!isMounted) return
 
-        setUser(result?.user ?? null)
+        setRouteUser(result?.user ?? null)
         setStream(result?.stream ?? null)
         setError(null)
       } catch (loadError) {
@@ -271,7 +454,7 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
         <View style={themed($stateBlock)}>
           <Text text={error} style={themed($errorText)} />
         </View>
-      ) : !user || !stream ? (
+      ) : !routeUser || !stream ? (
         <View style={themed($stateBlock)}>
           <Text text="Stream not found" preset="subheading" />
         </View>
@@ -279,8 +462,8 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
         <>
           <View style={themed($heroCard)}>
             <View style={themed($heroHeader)}>
-              {user.profilePicture ? (
-                <Image source={{ uri: user.profilePicture }} style={themed($avatar)} />
+              {routeUser.profilePicture ? (
+                <Image source={{ uri: routeUser.profilePicture }} style={themed($avatar)} />
               ) : (
                 <View style={themed($avatarFallback)}>
                   <Text text={username.charAt(0).toUpperCase()} preset="subheading" />
@@ -392,42 +575,11 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
             )}
           </View>
 
-          <View style={themed($section)}>
-            <View style={themed($sectionHeader)}>
-              <Text text="Chat" preset="subheading" size="sm" />
-              <Text text={`${chatMessages.length} messages`} size="xxs" style={themed($subtleText)} />
-            </View>
-            {chatMessages.length === 0 ? (
-              <Text text="No chat messages yet." size="xs" style={themed($subtleText)} />
-            ) : (
-              <View style={themed($chatList)}>
-                {chatMessages.map((message) => (
-                  <ChatMessageItem key={`${message.createdAt}-${message.text}`} message={message} />
-                ))}
-              </View>
-            )}
-          </View>
+          <LiveChatSection streamId={streamId} messages={chatMessages} />
         </>
       )}
     </Screen>
   )
-}
-
-const $chatCard: ViewStyle = {
-  borderWidth: 1,
-  borderColor: "#D4D7DD",
-  borderRadius: 14,
-  padding: 14,
-  gap: 6,
-  backgroundColor: "#FFFFFF",
-}
-
-const $chatText: TextStyle = {
-  color: "#212731",
-}
-
-const $chatMeta: TextStyle = {
-  color: "#5B6472",
 }
 
 const $postCard: ViewStyle = {
@@ -609,10 +761,6 @@ const $emptyCard: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
   backgroundColor: colors.background,
 })
 
-const $chatList: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  gap: spacing.sm,
-})
-
 const $postList: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   gap: spacing.sm,
 })
@@ -620,3 +768,167 @@ const $postList: ThemedStyle<ViewStyle> = ({ spacing }) => ({
 const $subtleText: ThemedStyle<TextStyle> = ({ colors }) => ({
   color: colors.textDim,
 })
+
+// ── Chat styles ────────────────────────────────────────────────────────────────
+
+const CHAT_SCROLL_HEIGHT = 280
+
+const $chatCard: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
+  borderRadius: 20,
+  overflow: "hidden",
+  borderWidth: 1,
+  borderColor: colors.palette.neutral300,
+  backgroundColor: colors.background,
+  paddingTop: spacing.md,
+})
+
+const $chatHeading: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.text,
+  paddingHorizontal: 16,
+  paddingBottom: 8,
+})
+
+const $chatScrollArea: ViewStyle = {
+  height: CHAT_SCROLL_HEIGHT,
+}
+
+const $chatScrollContent: ViewStyle = {
+  paddingHorizontal: 16,
+  paddingBottom: 4,
+}
+
+const $chatEmpty: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.textDim,
+  paddingBottom: 8,
+})
+
+const $chatRow: ViewStyle = {
+  flexDirection: "row",
+  alignItems: "flex-start",
+  gap: 10,
+  paddingVertical: 10,
+}
+
+const $chatAvatar: ViewStyle = {
+  width: 36,
+  height: 36,
+  borderRadius: 18,
+  flexShrink: 0,
+  overflow: "hidden",
+}
+
+const $chatAvatarImg: ImageStyle = {
+  width: 36,
+  height: 36,
+  borderRadius: 18,
+}
+
+const $chatAvatarFallback: ThemedStyle<ViewStyle> = ({ colors }) => ({
+  width: 36,
+  height: 36,
+  borderRadius: 18,
+  backgroundColor: colors.palette.neutral300,
+  alignItems: "center",
+  justifyContent: "center",
+})
+
+const $chatAvatarFallbackText: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.textDim,
+})
+
+const $chatBubble: ViewStyle = {
+  flex: 1,
+  gap: 2,
+}
+
+const $chatByline: ViewStyle = {
+  flexDirection: "row",
+  alignItems: "baseline",
+  gap: 8,
+  flexWrap: "wrap",
+}
+
+const $chatUsername: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.text,
+})
+
+const $chatTimestamp: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.textDim,
+})
+
+const $chatMessageText: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.text,
+})
+
+const $chatFooter: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
+  borderTopWidth: 1,
+  borderTopColor: colors.palette.neutral300,
+  paddingHorizontal: spacing.md,
+  paddingVertical: spacing.sm,
+  backgroundColor: colors.background,
+})
+
+const $chatInputRow: ViewStyle = {
+  flexDirection: "row",
+  alignItems: "flex-end",
+  gap: 10,
+}
+
+const $chatInput: ThemedStyle<ViewStyle> = ({ colors }) => ({
+  flex: 1,
+  minHeight: 40,
+  maxHeight: 100,
+  backgroundColor: colors.palette.neutral100,
+  borderWidth: 1,
+  borderColor: colors.palette.neutral300,
+  borderRadius: 12,
+  paddingHorizontal: 12,
+  paddingVertical: 8,
+  color: colors.text,
+  fontSize: 13,
+})
+
+const $sendButton: ViewStyle = {
+  height: 40,
+  paddingHorizontal: 16,
+  borderRadius: 12,
+  backgroundColor: "#3b82f6",
+  alignItems: "center",
+  justifyContent: "center",
+}
+
+const $sendButtonDisabled: ViewStyle = {
+  opacity: 0.45,
+}
+
+const $sendButtonPressed: ViewStyle = {
+  opacity: 0.75,
+}
+
+const $sendButtonText: TextStyle = {
+  color: "#ffffff",
+}
+
+const $guestRow: ViewStyle = {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 12,
+}
+
+const $guestText: ThemedStyle<TextStyle> = ({ colors }) => ({
+  flex: 1,
+  color: colors.textDim,
+})
+
+const $signInButton: ViewStyle = {
+  backgroundColor: "#3b82f6",
+  borderRadius: 12,
+  paddingHorizontal: 18,
+  paddingVertical: 10,
+  alignItems: "center",
+  justifyContent: "center",
+}
+
+const $signInButtonText: TextStyle = {
+  color: "#ffffff",
+}
