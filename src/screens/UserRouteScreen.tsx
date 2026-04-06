@@ -405,7 +405,7 @@ export const UserRouteScreen: FC<UserRouteScreenProps> = function UserRouteScree
         )}
 
         {!loading && !error && user && route ? (
-          <View style={[screenStyles.profileBadgeWrap, { top: insets.top + 60 }]}>
+          <View style={[screenStyles.profileBadgeWrap, { top: insets.top + 400 }]}>
             <View style={themed($profileBadge)}>
               {user.profilePicture ? (
                 <Image source={{ uri: user.profilePicture }} style={themed($avatar)} />
