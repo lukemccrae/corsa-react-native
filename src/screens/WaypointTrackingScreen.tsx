@@ -120,11 +120,15 @@ export const WaypointTrackingScreen: FC = function WaypointTrackingScreen() {
       return
     }
     const json = JSON.stringify(waypoints, null, 2)
-    Clipboard.setString(json)
-    Alert.alert(
-      "Exported",
-      `${waypoints.length} waypoint(s) copied to clipboard as JSON.`,
-    )
+    try {
+      Clipboard.setString(json)
+      Alert.alert(
+        "Exported",
+        `${waypoints.length} waypoint(s) copied to clipboard as JSON.`,
+      )
+    } catch {
+      Alert.alert("Export failed", "Could not copy waypoints to clipboard.")
+    }
   }
 
   const handleIntervalChange = (minutes: number) => {
@@ -281,8 +285,8 @@ const $statusDot: ThemedStyle<ViewStyle> = () => ({
   borderRadius: 5,
 })
 
-const $dotActive: ThemedStyle<ViewStyle> = () => ({
-  backgroundColor: "#2DA44E",
+const $dotActive: ThemedStyle<ViewStyle> = ({ colors }) => ({
+  backgroundColor: colors.tint,
 })
 
 const $dotInactive: ThemedStyle<ViewStyle> = ({ colors }) => ({
