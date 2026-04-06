@@ -46,6 +46,8 @@ const SCREEN_HEIGHT = Dimensions.get("window").height
 const PROFILE_PANEL_HEIGHT = Math.round(SCREEN_HEIGHT * 0.4)
 const MAP_SECTION_HEIGHT = SCREEN_HEIGHT - PROFILE_PANEL_HEIGHT
 const CHART_HEIGHT = Math.max(100, PROFILE_PANEL_HEIGHT - 100)
+const CHART_MIN_BAR_HEIGHT = 6
+const CHART_MAX_FILL_RATIO = 0.88
 
 // ── GeoJSON parsing ────────────────────────────────────────────────────────────
 function parseGeoJsonCoords(json: unknown): ElevCoord[] {
@@ -112,6 +114,10 @@ function formatGain(feet: number, uom?: string | null) {
   return uom === "METRIC" ? `${(feet * 0.3048).toFixed(0)} m` : `${feet.toFixed(0)} ft`
 }
 
+function formatElevationFeet(meters: number) {
+  return (meters * 3.28084).toFixed(0)
+}
+
 // ── ElevationChart ─────────────────────────────────────────────────────────────
 type ElevationChartProps = {
   coords: ElevCoord[]
@@ -123,6 +129,7 @@ function ElevationChart({ coords, uom, onScrub }: ElevationChartProps) {
   const containerRef = useRef<View>(null)
   const screenXRef = useRef(0)
   const [containerWidth, setContainerWidth] = useState(0)
+  const [containerHeight, setContainerHeight] = useState(CHART_HEIGHT)
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
 
   const bars = useMemo<ElevCoord[]>(() => {
@@ -188,13 +195,23 @@ function ElevationChart({ coords, uom, onScrub }: ElevationChartProps) {
       ? (activeIndex / (bars.length - 1)) * containerWidth
       : null
 
+  const getBarHeight = useCallback(
+    (elevation: number) => {
+      const normalized = (elevation - minElev) / elevRange
+      const maxBarHeight = Math.max(
+        CHART_MIN_BAR_HEIGHT,
+        containerHeight * CHART_MAX_FILL_RATIO,
+      )
+      return CHART_MIN_BAR_HEIGHT + normalized * (maxBarHeight - CHART_MIN_BAR_HEIGHT)
+    },
+    [containerHeight, elevRange, minElev],
+  )
+
   const activeDotY =
-    activeBar != null
-      ? CHART_HEIGHT - Math.max(2, ((activeBar.elevation - minElev) / elevRange) * CHART_HEIGHT)
-      : null
+    activeBar != null ? containerHeight - getBarHeight(activeBar.elevation) : null
 
   const distUnit = uom === "METRIC" ? "km" : "mi"
-  const elevUnit = uom === "METRIC" ? "m" : "ft"
+  const elevUnit = "ft"
   const firstDist = (bars[0]?.distance ?? 0).toFixed(1)
   const midDist = (bars[Math.floor(bars.length / 2)]?.distance ?? 0).toFixed(1)
   const lastDist = (bars[bars.length - 1]?.distance ?? 0).toFixed(1)
@@ -205,9 +222,10 @@ function ElevationChart({ coords, uom, onScrub }: ElevationChartProps) {
         ref={containerRef}
         style={$chartContainer}
         onLayout={() => {
-          containerRef.current?.measureInWindow((x, _y, width) => {
+          containerRef.current?.measureInWindow((x, _y, width, height) => {
             screenXRef.current = x
             setContainerWidth(width)
+            if (height > 0) setContainerHeight(height)
           })
         }}
         {...panResponder.panHandlers}
@@ -221,7 +239,7 @@ function ElevationChart({ coords, uom, onScrub }: ElevationChartProps) {
                 $bar,
                 {
                   width: barWidth,
-                  height: Math.max(2, ((bar.elevation - minElev) / elevRange) * CHART_HEIGHT),
+                  height: getBarHeight(bar.elevation),
                 },
               ]}
             />
@@ -251,7 +269,7 @@ function ElevationChart({ coords, uom, onScrub }: ElevationChartProps) {
         <Text
           text={
             activeBar
-              ? `${activeBar.distance.toFixed(1)} ${distUnit} · ${activeBar.elevation.toFixed(0)} ${elevUnit}`
+              ? `${activeBar.distance.toFixed(1)} ${distUnit} · ${formatElevationFeet(activeBar.elevation)} ${elevUnit}`
               : `${midDist} ${distUnit}`
           }
           size="xxs"
@@ -536,7 +554,7 @@ const $chartBlock: ViewStyle = {
 }
 
 const $chartContainer: ViewStyle = {
-  height: CHART_HEIGHT,
+  flex: 1,
   width: "100%",
   overflow: "hidden",
   borderRadius: 18,
@@ -549,9 +567,9 @@ const $barsRow: ViewStyle = {
   bottom: 0,
   left: 0,
   right: 0,
+  top: 0,
   flexDirection: "row",
   alignItems: "flex-end",
-  height: CHART_HEIGHT,
 }
 
 const $bar: ViewStyle = {
