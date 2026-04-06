@@ -144,6 +144,11 @@ export const MapScreen: FC = function MapScreen() {
     [socialStreams],
   )
 
+  const profileBadgeStyle = useMemo(
+    () => themed(sidebarCollapsed ? $profileBadgeCollapsed : $profileBadgeSidebarOpen),
+    [sidebarCollapsed, themed],
+  )
+
   useEffect(() => {
     if (!streamMarkers.length) return
 
@@ -285,10 +290,11 @@ export const MapScreen: FC = function MapScreen() {
         <ProfileMenu
           profilePictureUri={profilePictureUri}
           username={displayUsername}
+          containerStyle={profileBadgeStyle}
         />
       ) : (
         <Pressable
-          style={themed($profileBadge)}
+          style={[themed($profileBadge), profileBadgeStyle]}
           onPress={() => router.push("/(auth)/sign-in")}
           accessibilityRole="button"
           accessibilityLabel={translate("mapScreen:signIn")}
@@ -398,7 +404,6 @@ const $zoomButtonText: ThemedStyle<TextStyle> = ({ colors }) => ({
 
 const $profileBadge: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
   position: "absolute",
-  top: spacing.xxxl,
   right: spacing.md,
   flexDirection: "row",
   alignItems: "center",
@@ -413,6 +418,14 @@ const $profileBadge: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
   shadowOpacity: 0.15,
   shadowRadius: 8,
   elevation: 4,
+})
+
+const $profileBadgeCollapsed: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  top: spacing.xxxl,
+})
+
+const $profileBadgeSidebarOpen: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  top: spacing.xxxl + spacing.xxl,
 })
 
 const $avatar: ThemedStyle<ImageStyle> = () => ({

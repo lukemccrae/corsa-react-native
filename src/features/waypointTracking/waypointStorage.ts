@@ -30,6 +30,15 @@ function setWaypointIds(ids: string[]): void {
   storage.set(WAYPOINT_IDS_KEY, JSON.stringify(ids))
 }
 
+function normalizeWaypoint(waypoint: Waypoint): Waypoint {
+  return {
+    ...waypoint,
+    mileMarker: waypoint.mileMarker ?? null,
+    cumulativeVert: waypoint.cumulativeVert ?? null,
+    pointIndex: waypoint.pointIndex ?? null,
+  }
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
@@ -37,12 +46,25 @@ function setWaypointIds(ids: string[]): void {
  * duplicate deliveries from the OS are naturally de-duplicated.
  */
 export function appendWaypoint(waypoint: Waypoint): void {
-  const id = `${waypoint.streamId}_${waypoint.timestamp}`
-  storage.set(`waypoint:${id}`, JSON.stringify(waypoint))
+  const normalized = normalizeWaypoint(waypoint)
+  const id = `${normalized.streamId}_${normalized.timestamp}`
+  storage.set(`waypoint:${id}`, JSON.stringify(normalized))
   const ids = getWaypointIds()
   if (!ids.includes(id)) {
     ids.push(id)
     setWaypointIds(ids)
+    if (__DEV__) {
+      console.info("[WaypointTracking] recorded", {
+        streamId: normalized.streamId,
+        timestamp: normalized.timestamp,
+        lat: normalized.lat,
+        lng: normalized.lng,
+        altitude: normalized.altitude,
+        cumulativeVert: normalized.cumulativeVert,
+        mileMarker: normalized.mileMarker,
+        pointIndex: normalized.pointIndex,
+      })
+    }
   }
 }
 
@@ -52,7 +74,7 @@ export function appendWaypoint(waypoint: Waypoint): void {
 export function getWaypoint(id: string): Waypoint | null {
   try {
     const raw = storage.getString(`waypoint:${id}`)
-    return raw ? (JSON.parse(raw) as Waypoint) : null
+    return raw ? normalizeWaypoint(JSON.parse(raw) as Waypoint) : null
   } catch {
     return null
   }

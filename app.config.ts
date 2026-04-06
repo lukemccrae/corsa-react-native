@@ -30,6 +30,12 @@ module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
       ...config.ios,
       infoPlist: {
         ...config.ios?.infoPlist,
+        UIBackgroundModes: [
+          ...(((config.ios?.infoPlist?.UIBackgroundModes as string[] | undefined) ?? []).filter(
+            (mode) => mode !== "location",
+          )),
+          "location",
+        ],
         // Register the reverse client ID scheme so iOS routes the OAuth
         // redirect back to this app after Google authentication.
         ...(reverseIosClientId && {

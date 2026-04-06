@@ -7,10 +7,10 @@ export interface Waypoint {
   lat: number
   lng: number
   altitude: number | null
-  timestamp: string // ISO 8601 / AWSDateTime
-  mileMarker?: number | null
-  cumulativeVert?: number | null
-  pointIndex?: number | null
+  timestamp: number | string // ms epoch locally, AWSDateTime when loaded from backend
+  mileMarker: number | null
+  cumulativeVert: number | null
+  pointIndex: number | null
   private?: boolean | null
 }
 
@@ -18,6 +18,8 @@ export interface Waypoint {
 export interface TrackingConfig {
   /** Interval between waypoint captures, in minutes. */
   intervalMinutes: number
+  /** Optional stream ID selected by the user for the next session. */
+  streamId?: string
 }
 
 export const TRACKING_TASK_NAME = "BACKGROUND_LOCATION_TASK"
@@ -25,4 +27,4 @@ export const TRACKING_TASK_NAME = "BACKGROUND_LOCATION_TASK"
 export const DEFAULT_INTERVAL_MINUTES = 5
 
 /** Distance threshold used on iOS (metres). Approximates the time interval. */
-export const IOS_DISTANCE_INTERVAL_M = 200
+export const IOS_DISTANCE_INTERVAL_M = 25

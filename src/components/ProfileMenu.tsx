@@ -4,6 +4,7 @@ import {
   Modal,
   Pressable,
   StyleSheet,
+  type StyleProp,
   View,
   ViewStyle,
   Image,
@@ -32,7 +33,8 @@ type AppRoutes =
 export const ProfileMenu: React.FC<{
   profilePictureUri?: string
   username?: string
-}> = ({ profilePictureUri, username }) => {
+  containerStyle?: StyleProp<ViewStyle>
+}> = ({ profilePictureUri, username, containerStyle }) => {
   const { themed } = useAppTheme()
   const router = useRouter()
   const { signOut } = useAuth()
@@ -102,6 +104,7 @@ export const ProfileMenu: React.FC<{
         onLayout={handleLayout}
         style={({ pressed }) => [
           themed($profileBadge),
+          containerStyle,
           pressed ? themed($profileBadgePressed) : null,
         ]}
         accessibilityRole="button"

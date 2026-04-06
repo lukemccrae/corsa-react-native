@@ -1,5 +1,5 @@
 import { FC, useCallback, useEffect, useState } from "react"
-import { Alert, Clipboard, ScrollView, TextStyle, View, ViewStyle } from "react-native"
+import { Alert, ScrollView, TextStyle, View, ViewStyle } from "react-native"
 import { useRouter } from "expo-router"
 
 import { Button } from "@/components/Button"
@@ -13,11 +13,11 @@ import {
   requestLocationPermissions,
   startLocationTracking,
   stopLocationTracking,
+  TRACKING_UNAVAILABLE_MESSAGE,
 } from "@/features/waypointTracking/locationTask"
 import {
   clearActiveStreamId,
   clearWaypoints,
-  getAllWaypoints,
   getWaypointCount,
   loadTrackingConfig,
   saveTrackingConfig,
@@ -65,34 +65,54 @@ export const WaypointTrackingScreen: FC = function WaypointTrackingScreen() {
   const handleStart = async () => {
     setBusy(true)
     setPermissionError(null)
-    const result = await requestLocationPermissions()
-    if (result === "foreground_denied") {
+
+    try {
+      const result = await requestLocationPermissions()
+      if (result === "task_manager_unavailable") {
+        setPermissionError(TRACKING_UNAVAILABLE_MESSAGE)
+        return
+      }
+      if (result === "foreground_denied") {
+        setPermissionError(
+          "Foreground location permission is required. Please enable it in your device settings.",
+        )
+        return
+      }
+      if (result === "background_denied") {
+        setPermissionError(
+          "Background location permission is required to track while the app is closed. Please set location access to 'Always' in your device settings.",
+        )
+        return
+      }
+
+      const streamId = generateUUID()
+      setActiveStreamId(streamId)
+      await startLocationTracking(intervalMinutes)
+      await refresh()
+    } catch (error) {
       setPermissionError(
-        "Foreground location permission is required. Please enable it in your device settings.",
+        error instanceof Error ? error.message : "Could not start waypoint tracking.",
       )
+      clearActiveStreamId()
+    } finally {
       setBusy(false)
-      return
     }
-    if (result === "background_denied") {
-      setPermissionError(
-        "Background location permission is required to track while the app is closed. Please set location access to 'Always' in your device settings.",
-      )
-      setBusy(false)
-      return
-    }
-    const streamId = generateUUID()
-    setActiveStreamId(streamId)
-    await startLocationTracking(intervalMinutes)
-    await refresh()
-    setBusy(false)
   }
 
   const handleStop = async () => {
     setBusy(true)
-    await stopLocationTracking()
-    clearActiveStreamId()
-    await refresh()
-    setBusy(false)
+
+    try {
+      await stopLocationTracking()
+      clearActiveStreamId()
+      await refresh()
+    } catch (error) {
+      setPermissionError(
+        error instanceof Error ? error.message : "Could not stop waypoint tracking.",
+      )
+    } finally {
+      setBusy(false)
+    }
   }
 
   const handleClear = () => {
@@ -111,24 +131,6 @@ export const WaypointTrackingScreen: FC = function WaypointTrackingScreen() {
         },
       ],
     )
-  }
-
-  const handleExport = () => {
-    const waypoints = getAllWaypoints()
-    if (waypoints.length === 0) {
-      Alert.alert("No waypoints", "There are no stored waypoints to export.")
-      return
-    }
-    const json = JSON.stringify(waypoints, null, 2)
-    try {
-      Clipboard.setString(json)
-      Alert.alert(
-        "Exported",
-        `${waypoints.length} waypoint(s) copied to clipboard as JSON.`,
-      )
-    } catch {
-      Alert.alert("Export failed", "Could not copy waypoints to clipboard.")
-    }
   }
 
   const handleIntervalChange = (minutes: number) => {
@@ -227,13 +229,6 @@ export const WaypointTrackingScreen: FC = function WaypointTrackingScreen() {
       <View style={themed($section)}>
         <Text text="Data" preset="formLabel" style={themed($sectionLabel)} />
         <View style={themed($buttonRow)}>
-          <Button
-            text="Export JSON"
-            preset="default"
-            onPress={handleExport}
-            disabled={waypointCount === 0}
-            style={themed($controlButton)}
-          />
           <Button
             text="Clear data"
             preset="default"

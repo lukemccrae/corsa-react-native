@@ -1,6 +1,7 @@
 import { FC, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ActivityIndicator,
+  Alert,
   Image,
   ImageStyle,
   KeyboardAvoidingView,
@@ -13,10 +14,12 @@ import {
   View,
   ViewStyle,
 } from "react-native"
+import * as Location from "expo-location"
 import { useRouter } from "expo-router"
 
 import {
   MapLibreMap,
+  type MapLibreMapRef,
   type MapCoordinate,
   type StreamPostMarker,
   type StreamWaypointMarker,
@@ -29,6 +32,20 @@ import { fetchUserStreamById, publishChatMessage } from "@/services/api/graphql"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
 import { useAuth } from "@/providers/AuthProvider"
+import {
+  isTrackingActive,
+  requestLocationPermissions,
+  startLocationTracking,
+  stopLocationTracking,
+  TRACKING_UNAVAILABLE_MESSAGE,
+} from "@/features/waypointTracking/locationTask"
+import {
+  clearActiveStreamId,
+  getAllWaypoints,
+  getActiveStreamId,
+  loadTrackingConfig,
+  setActiveStreamId,
+} from "@/features/waypointTracking/waypointStorage"
 
 interface UserStreamScreenProps {
   username: string
@@ -334,11 +351,18 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
   streamId,
 }) {
   const { themed } = useAppTheme()
+  const { appUser } = useAuth()
   const router = useRouter()
+  const streamMapRef = useRef<MapLibreMapRef>(null)
   const [routeUser, setRouteUser] = useState<User | null>(null)
   const [stream, setStream] = useState<LiveStream | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [tracking, setTracking] = useState(false)
+  const [activeTrackingStreamId, setActiveTrackingStreamId] = useState<string | null>(null)
+  const [trackingBusy, setTrackingBusy] = useState(false)
+  const [trackingError, setTrackingError] = useState<string | null>(null)
+  const [localWaypointRefreshTick, setLocalWaypointRefreshTick] = useState(0)
 
   useEffect(() => {
     let isMounted = true
@@ -364,6 +388,143 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
     }
   }, [streamId, username])
 
+  const refreshTrackingState = useCallback(async () => {
+    const active = await isTrackingActive()
+    setTracking(active)
+    setActiveTrackingStreamId(getActiveStreamId())
+  }, [])
+
+  useEffect(() => {
+    void refreshTrackingState()
+  }, [refreshTrackingState])
+
+  useEffect(() => {
+    const intervalMs = tracking ? 4000 : 12000
+    const timer = setInterval(() => setLocalWaypointRefreshTick((value) => value + 1), intervalMs)
+    return () => clearInterval(timer)
+  }, [tracking])
+
+  const isOwnStream = useMemo(() => {
+    const normalizedProfileUsername = username.trim().toLowerCase()
+    const normalizedCurrentUsername = appUser?.username?.trim().toLowerCase()
+    return Boolean(normalizedCurrentUsername) && normalizedProfileUsername === normalizedCurrentUsername
+  }, [appUser?.username, username])
+
+  const handleStartTracking = useCallback(async () => {
+    setTrackingBusy(true)
+    setTrackingError(null)
+
+    try {
+      const result = await requestLocationPermissions()
+      if (result === "task_manager_unavailable") {
+        setTrackingError(TRACKING_UNAVAILABLE_MESSAGE)
+        return
+      }
+      if (result === "foreground_denied") {
+        setTrackingError(
+          "Foreground location permission is required. Please enable it in your device settings.",
+        )
+        return
+      }
+      if (result === "background_denied") {
+        setTrackingError(
+          "Background location permission is required to track while the app is closed. Please set location access to 'Always' in your device settings.",
+        )
+        return
+      }
+
+      if (tracking && activeTrackingStreamId && activeTrackingStreamId !== streamId) {
+        await stopLocationTracking()
+      }
+
+      const config = loadTrackingConfig()
+      setActiveStreamId(streamId)
+      await startLocationTracking(config.intervalMinutes)
+      await refreshTrackingState()
+      setLocalWaypointRefreshTick((value) => value + 1)
+
+      Alert.alert(
+        "Tracking started",
+        `Now recording waypoints for stream ${streamId} every ${config.intervalMinutes} minute(s).`,
+      )
+    } catch (trackingStartError) {
+      setTrackingError(
+        trackingStartError instanceof Error
+          ? trackingStartError.message
+          : "Could not start tracking for this stream.",
+      )
+      clearActiveStreamId()
+    } finally {
+      setTrackingBusy(false)
+    }
+  }, [activeTrackingStreamId, refreshTrackingState, streamId, tracking])
+
+  const handleStopTracking = useCallback(async () => {
+    setTrackingBusy(true)
+    setTrackingError(null)
+
+    try {
+      await stopLocationTracking()
+      clearActiveStreamId()
+      await refreshTrackingState()
+      setLocalWaypointRefreshTick((value) => value + 1)
+    } catch (trackingStopError) {
+      setTrackingError(
+        trackingStopError instanceof Error
+          ? trackingStopError.message
+          : "Could not stop tracking.",
+      )
+    } finally {
+      setTrackingBusy(false)
+    }
+  }, [refreshTrackingState])
+
+  const handleLogLocalWaypoints = useCallback(() => {
+    const points = getAllWaypoints()
+      .filter((waypoint) => waypoint.streamId === streamId)
+      .sort((left, right) => new Date(left.timestamp).getTime() - new Date(right.timestamp).getTime())
+
+    console.info(`[WaypointTracking] local points for ${streamId}: ${points.length}`)
+    points.forEach((point, index) => {
+      console.info(`[WaypointTracking] #${index + 1}`, {
+        timestamp: point.timestamp,
+        lat: point.lat,
+        lng: point.lng,
+        altitude: point.altitude,
+      })
+    })
+  }, [streamId])
+
+  const handleCenterOnCurrentLocation = useCallback(async () => {
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync()
+      if (permission.status !== "granted") {
+        setTrackingError("Foreground location permission is required to center on your location.")
+        return
+      }
+
+      const position = await Location.getCurrentPositionAsync({
+        accuracy:
+          Platform.OS === "ios"
+            ? Location.Accuracy.BestForNavigation
+            : Location.Accuracy.High,
+      })
+
+      streamMapRef.current?.flyTo(
+        position.coords.longitude,
+        position.coords.latitude,
+        700,
+        15,
+      )
+    } catch (centerError) {
+      setTrackingError(
+        centerError instanceof Error
+          ? centerError.message
+          : "Could not center map on current location.",
+      )
+    }
+  }, [])
+
   const chatMessages = useMemo(
     () => (stream?.chatMessages ?? []).filter((message): message is ChatMessage => Boolean(message)),
     [stream],
@@ -377,6 +538,30 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
     [stream],
   )
 
+  const localWaypoints = useMemo(
+    () =>
+      getAllWaypoints()
+        .filter((waypoint) => waypoint.streamId === streamId)
+        .sort((left, right) => new Date(left.timestamp).getTime() - new Date(right.timestamp).getTime()),
+    [localWaypointRefreshTick, streamId],
+  )
+
+  const mapWaypoints = useMemo(() => {
+    const byKey = new Map<string, { streamId: string; lat: number; lng: number; timestamp: string; pointIndex?: number | null }>()
+
+    publicWaypoints.forEach((waypoint) => {
+      byKey.set(`${waypoint.streamId}:${waypoint.timestamp}`, waypoint)
+    })
+
+    localWaypoints.forEach((waypoint) => {
+      byKey.set(`${waypoint.streamId}:${waypoint.timestamp}`, waypoint)
+    })
+
+    return [...byKey.values()].sort(
+      (left, right) => new Date(left.timestamp).getTime() - new Date(right.timestamp).getTime(),
+    )
+  }, [localWaypoints, publicWaypoints])
+
   const posts = useMemo(
     () =>
       (stream?.posts ?? [])
@@ -387,21 +572,21 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
 
   const trackCoordinates = useMemo<MapCoordinate[]>(
     () =>
-      publicWaypoints.map((waypoint) => ({
+      mapWaypoints.map((waypoint) => ({
         latitude: waypoint.lat,
         longitude: waypoint.lng,
       })),
-    [publicWaypoints],
+    [mapWaypoints],
   )
 
   const waypointMarkers = useMemo<StreamWaypointMarker[]>(
     () =>
-      publicWaypoints.map((waypoint, index) => ({
+      mapWaypoints.map((waypoint, index) => ({
         id: `${waypoint.streamId}-${waypoint.pointIndex ?? index}`,
         latitude: waypoint.lat,
         longitude: waypoint.lng,
       })),
-    [publicWaypoints],
+    [mapWaypoints],
   )
 
   const postMarkers = useMemo<StreamPostMarker[]>(
@@ -511,22 +696,81 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
                 style={themed($ctaButton)}
               />
             ) : null}
+
+            {isOwnStream ? (
+              <View style={themed($trackingCard)}>
+                <Text text="Waypoint tracking" preset="formLabel" style={themed($trackingTitle)} />
+                <Text
+                  text={
+                    tracking && activeTrackingStreamId === streamId
+                      ? "Tracking is active for this stream."
+                      : tracking && activeTrackingStreamId
+                        ? `Tracking is active for another stream (${activeTrackingStreamId}).`
+                        : "Tracking is currently stopped."
+                  }
+                  size="xs"
+                  style={themed($subtleText)}
+                />
+                <Text
+                  text={`Recorded on this device for this stream: ${localWaypoints.length}`}
+                  size="xs"
+                  style={themed($subtleText)}
+                />
+                {trackingError ? (
+                  <Text text={trackingError} size="xs" style={themed($errorText)} />
+                ) : null}
+                <View style={themed($trackingButtons)}>
+                  <Button
+                    text={
+                      tracking && activeTrackingStreamId === streamId
+                        ? "Tracking active"
+                        : "Start tracking this stream"
+                    }
+                    preset="filled"
+                    onPress={() => void handleStartTracking()}
+                    disabled={trackingBusy || (tracking && activeTrackingStreamId === streamId)}
+                    style={themed($trackingButton)}
+                  />
+                  <Button
+                    text="Stop tracking"
+                    preset="default"
+                    onPress={() => void handleStopTracking()}
+                    disabled={trackingBusy || !tracking}
+                    style={themed($trackingButton)}
+                  />
+                  <Button
+                    text="Log local points"
+                    preset="default"
+                    onPress={handleLogLocalWaypoints}
+                    style={themed($trackingButton)}
+                  />
+                </View>
+              </View>
+            ) : null}
           </View>
 
           <View style={themed($section)}>
             <View style={themed($sectionHeader)}>
               <Text text="Map activity" preset="subheading" size="sm" />
               <Text
-                text={`${publicWaypoints.length} points • ${postMarkers.length} posts`}
+                text={`${mapWaypoints.length} points • ${postMarkers.length} posts`}
                 size="xxs"
                 style={themed($subtleText)}
               />
             </View>
 
+            <Button
+              text="Center on my location"
+              preset="default"
+              onPress={() => void handleCenterOnCurrentLocation()}
+              style={themed($mapActionButton)}
+            />
+
             {hasMapData ? (
               <View style={themed($mapCard)}>
                 <View style={themed($mapFrame)}>
                   <MapLibreMap
+                    ref={streamMapRef}
                     initialCenter={initialCenter ?? undefined}
                     initialZoomLevel={initialZoomLevel}
                     trackCoordinates={trackCoordinates}
@@ -691,6 +935,33 @@ const $detailBlock: ThemedStyle<ViewStyle> = ({ spacing }) => ({
 })
 
 const $ctaButton: ThemedStyle<ViewStyle> = () => ({
+  minHeight: 44,
+})
+
+const $mapActionButton: ThemedStyle<ViewStyle> = () => ({
+  minHeight: 44,
+  alignSelf: "flex-start",
+})
+
+const $trackingCard: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({
+  borderWidth: 1,
+  borderColor: colors.palette.neutral300,
+  borderRadius: 16,
+  padding: spacing.sm,
+  gap: spacing.xs,
+  backgroundColor: colors.background,
+})
+
+const $trackingTitle: ThemedStyle<TextStyle> = () => ({})
+
+const $trackingButtons: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  flexDirection: "row",
+  flexWrap: "wrap",
+  gap: spacing.sm,
+})
+
+const $trackingButton: ThemedStyle<ViewStyle> = () => ({
+  flex: 1,
   minHeight: 44,
 })
 

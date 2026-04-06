@@ -19,7 +19,10 @@ const makeWaypoint = (overrides: Partial<Waypoint> = {}): Waypoint => ({
   lat: 47.123,
   lng: -122.456,
   altitude: 100,
-  timestamp: "2024-01-01T00:00:00.000Z",
+  timestamp: 1704067200000,
+  cumulativeVert: null,
+  mileMarker: null,
+  pointIndex: null,
   ...overrides,
 })
 
@@ -45,8 +48,8 @@ describe("waypointStorage", () => {
     })
 
     it("stores multiple distinct waypoints", () => {
-      appendWaypoint(makeWaypoint({ timestamp: "2024-01-01T00:00:00.000Z" }))
-      appendWaypoint(makeWaypoint({ timestamp: "2024-01-01T00:05:00.000Z" }))
+      appendWaypoint(makeWaypoint({ timestamp: 1704067200000 }))
+      appendWaypoint(makeWaypoint({ timestamp: 1704067500000 }))
       expect(getWaypointCount()).toBe(2)
     })
   })
@@ -70,8 +73,8 @@ describe("waypointStorage", () => {
 
   describe("getAllWaypoints", () => {
     it("returns waypoints in insertion order", () => {
-      const w1 = makeWaypoint({ timestamp: "2024-01-01T00:00:00.000Z" })
-      const w2 = makeWaypoint({ timestamp: "2024-01-01T00:05:00.000Z" })
+      const w1 = makeWaypoint({ timestamp: 1704067200000 })
+      const w2 = makeWaypoint({ timestamp: 1704067500000 })
       appendWaypoint(w1)
       appendWaypoint(w2)
       expect(getAllWaypoints()).toEqual([w1, w2])
@@ -86,8 +89,8 @@ describe("waypointStorage", () => {
 
   describe("clearWaypoints", () => {
     it("removes all waypoints and resets the count to zero", () => {
-      appendWaypoint(makeWaypoint({ timestamp: "2024-01-01T00:00:00.000Z" }))
-      appendWaypoint(makeWaypoint({ timestamp: "2024-01-01T00:05:00.000Z" }))
+      appendWaypoint(makeWaypoint({ timestamp: 1704067200000 }))
+      appendWaypoint(makeWaypoint({ timestamp: 1704067500000 }))
       clearWaypoints()
       expect(getWaypointCount()).toBe(0)
       expect(getAllWaypoints()).toEqual([])
