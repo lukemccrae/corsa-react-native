@@ -265,6 +265,15 @@ export const UserProfileScreen: FC<UserProfileScreenProps> = function UserProfil
             <Text text="Routes" size="xs" style={themed($subtleText)} />
           </View>
         </View>
+
+        {isOwnProfile ? (
+          <Button
+            text="Waypoint Tracking"
+            preset="default"
+            onPress={() => router.push("/(app)/waypoints")}
+            style={themed($waypointButton)}
+          />
+        ) : null}
       </View>
 
       {loading ? (
@@ -558,4 +567,9 @@ const $list: ThemedStyle<ViewStyle> = ({ spacing }) => ({
 const $emptyState: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   paddingVertical: spacing.xl,
   alignItems: "center",
+})
+
+const $waypointButton: ThemedStyle<ViewStyle> = () => ({
+  minHeight: 44,
+  alignSelf: "flex-start",
 })

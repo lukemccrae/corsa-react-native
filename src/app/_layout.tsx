@@ -10,6 +10,10 @@ import { ThemeProvider } from "@/theme/context"
 import { customFontsToLoad } from "@/theme/typography"
 import { loadDateFnsLocale } from "@/utils/formatDate"
 
+// Register the background location task as early as possible so the OS can
+// deliver location events even before any tracking screen is mounted.
+import "@/features/waypointTracking/locationTask"
+
 SplashScreen.preventAutoHideAsync()
 
 if (__DEV__) {
