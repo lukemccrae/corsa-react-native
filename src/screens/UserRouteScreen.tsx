@@ -43,9 +43,9 @@ type ElevCoord = {
 
 const CHART_BAR_COUNT = 180
 const SCREEN_HEIGHT = Dimensions.get("window").height
-const PROFILE_PANEL_HEIGHT = Math.round(SCREEN_HEIGHT * 0.5)
+const PROFILE_PANEL_HEIGHT = Math.round(SCREEN_HEIGHT * 0.4)
 const MAP_SECTION_HEIGHT = SCREEN_HEIGHT - PROFILE_PANEL_HEIGHT
-const CHART_HEIGHT = Math.max(240, PROFILE_PANEL_HEIGHT - 124)
+const CHART_HEIGHT = Math.max(100, PROFILE_PANEL_HEIGHT - 100)
 
 // ── GeoJSON parsing ────────────────────────────────────────────────────────────
 function parseGeoJsonCoords(json: unknown): ElevCoord[] {
@@ -381,7 +381,7 @@ export const UserRouteScreen: FC<UserRouteScreenProps> = function UserRouteScree
 
   return (
     <View style={screenStyles.root}>
-      <View style={[screenStyles.mapSection, { paddingTop: insets.top, height: MAP_SECTION_HEIGHT }]}> 
+      <View style={[screenStyles.mapSection, { height: MAP_SECTION_HEIGHT }]}>
         <MapLibreMap
           ref={mapRef}
           trackCoordinates={trackCoordinates}
@@ -390,7 +390,7 @@ export const UserRouteScreen: FC<UserRouteScreenProps> = function UserRouteScree
           initialZoomLevel={3}
         />
 
-        <View style={screenStyles.backButtonOverlay} pointerEvents="box-none">
+        <View style={[screenStyles.backButtonOverlay, { top: insets.top + 12 }]} pointerEvents="box-none">
           <Button
             text="← Back"
             onPress={() => router.replace(`/(app)/user/${username}`)}
@@ -399,13 +399,13 @@ export const UserRouteScreen: FC<UserRouteScreenProps> = function UserRouteScree
         </View>
 
         {geoLoading && (
-          <View style={screenStyles.geoLoadingOverlay}>
+          <View style={[screenStyles.geoLoadingOverlay, { top: insets.top + 12 }]}>
             <ActivityIndicator color="#ffffff" />
           </View>
         )}
 
         {!loading && !error && user && route ? (
-          <View style={screenStyles.profileBadgeWrap}>
+          <View style={[screenStyles.profileBadgeWrap, { top: insets.top + 60 }]}>
             <View style={themed($profileBadge)}>
               {user.profilePicture ? (
                 <Image source={{ uri: user.profilePicture }} style={themed($avatar)} />
@@ -416,7 +416,12 @@ export const UserRouteScreen: FC<UserRouteScreenProps> = function UserRouteScree
               )}
               <View style={themed($badgeCopy)}>
                 <Text text={route.name} size="xs" weight="medium" numberOfLines={1} />
-                <Text text={`@${username}`} size="xxs" style={themed($subtleText)} numberOfLines={1} />
+                <Text
+                  text={`@${username} · ${formatDistance(route.distanceInMiles, route.uom)} · +${formatGain(route.gainInFeet, route.uom)}`}
+                  size="xxs"
+                  style={themed($subtleText)}
+                  numberOfLines={1}
+                />
               </View>
             </View>
           </View>
@@ -424,19 +429,19 @@ export const UserRouteScreen: FC<UserRouteScreenProps> = function UserRouteScree
       </View>
 
       {loading ? (
-        <View style={[screenStyles.centerStateOverlay, { paddingBottom: PROFILE_PANEL_HEIGHT / 2 }]}> 
+        <View style={[screenStyles.centerStateOverlay, { paddingBottom: PROFILE_PANEL_HEIGHT / 2 }]}>
           <View style={themed($stateCard)}>
             <ActivityIndicator />
           </View>
         </View>
       ) : error ? (
-        <View style={[screenStyles.centerStateOverlay, { paddingBottom: PROFILE_PANEL_HEIGHT / 2 }]}> 
+        <View style={[screenStyles.centerStateOverlay, { paddingBottom: PROFILE_PANEL_HEIGHT / 2 }]}>
           <View style={themed($stateCard)}>
             <Text text={error} style={themed($errorText)} />
           </View>
         </View>
       ) : !user || !route ? (
-        <View style={[screenStyles.centerStateOverlay, { paddingBottom: PROFILE_PANEL_HEIGHT / 2 }]}> 
+        <View style={[screenStyles.centerStateOverlay, { paddingBottom: PROFILE_PANEL_HEIGHT / 2 }]}>
           <View style={themed($stateCard)}>
             <Text text="Route not found" preset="subheading" />
           </View>
@@ -450,29 +455,8 @@ export const UserRouteScreen: FC<UserRouteScreenProps> = function UserRouteScree
         >
           <View style={themed($elevSection)}>
             <View style={themed($elevHeader)}>
-              <View style={themed($profileCopy)}>
-                <Text text="Elevation profile" preset="subheading" />
-                <Text text="Drag across the profile to pin points on the map" size="xxs" style={themed($subtleText)} />
-              </View>
-            </View>
-
-            <View style={themed($statsRow)}>
-              <View style={themed($statChip)}>
-                <Text text="Distance" size="xxs" style={themed($subtleText)} />
-                <Text text={formatDistance(route.distanceInMiles, route.uom)} size="xs" weight="medium" />
-              </View>
-              <View style={themed($statChip)}>
-                <Text text="Gain" size="xxs" style={themed($subtleText)} />
-                <Text text={formatGain(route.gainInFeet, route.uom)} size="xs" weight="medium" />
-              </View>
-              <View style={themed($statChip)}>
-                <Text text="Status" size="xxs" style={themed($subtleText)} />
-                <Text text={route.processingStatus} size="xs" weight="medium" />
-              </View>
-              <View style={themed($statChip)}>
-                <Text text="Created" size="xxs" style={themed($subtleText)} />
-                <Text text={formatDate(route.createdAt)} size="xs" weight="medium" />
-              </View>
+              <Text text="Elevation" size="xs" weight="medium" />
+              <Text text="Drag to scrub" size="xxs" style={themed($subtleText)} />
             </View>
 
             {geoError ? (
@@ -507,7 +491,6 @@ const screenStyles = StyleSheet.create({
   backButtonOverlay: {
     position: "absolute",
     left: 12,
-    top: 12,
     zIndex: 30,
   },
   backButton: {
@@ -519,7 +502,6 @@ const screenStyles = StyleSheet.create({
   geoLoadingOverlay: {
     position: "absolute",
     right: 12,
-    top: 12,
     width: 32,
     height: 32,
     borderRadius: 16,
@@ -539,7 +521,6 @@ const screenStyles = StyleSheet.create({
     position: "absolute",
     left: 16,
     right: 64,
-    bottom: 16,
     zIndex: 20,
   },
   profilePanel: {
@@ -664,7 +645,6 @@ const $profileBadge: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
   flexDirection: "row",
   alignItems: "center",
   gap: spacing.xs,
-  maxWidth: 240,
   backgroundColor: colors.background,
   borderRadius: 999,
   paddingVertical: spacing.xs,
@@ -678,8 +658,8 @@ const $profileBadge: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
 
 const $elevSection: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
   flex: 1,
-  gap: spacing.md,
-  padding: spacing.lg,
+  gap: spacing.sm,
+  padding: spacing.md,
   borderTopLeftRadius: 28,
   borderTopRightRadius: 28,
   borderWidth: 1,
@@ -690,7 +670,7 @@ const $elevSection: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
 const $elevHeader: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   flexDirection: "row",
   justifyContent: "space-between",
-  alignItems: "flex-start",
+  alignItems: "center",
   gap: spacing.xs,
 })
 
