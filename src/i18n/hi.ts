@@ -49,6 +49,13 @@ const hi: Translations = {
     retry: "Retry",
     locationError: "Could not get your location. Please try again.",
   },
+  profileMenu: {
+    routes: "मार्ग",
+    devices: "डिवाइस",
+    streams: "स्ट्रीम्स",
+    myProfile: "मेरी प्रोफ़ाइल",
+    logOut: "लॉगआउट",
+  },
   userProfileScreen: {
     title: "प्रोफ़ाइल",
     bio: "जीवनी",

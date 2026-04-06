@@ -50,6 +50,13 @@ const es: Translations = {
     retry: "Retry",
     locationError: "Could not get your location. Please try again.",
   },
+  profileMenu: {
+    routes: "Rutas",
+    devices: "Dispositivos",
+    streams: "Transmisiones",
+    myProfile: "Mi Perfil",
+    logOut: "Cerrar sesión",
+  },
   userProfileScreen: {
     title: "Perfil",
     bio: "Biografía",

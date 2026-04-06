@@ -21,6 +21,7 @@ import {
   MapLibreMapRef,
   type SocialMapMarker,
 } from "@/components/Map/MapLibreMap"
+import { ProfileMenu } from "@/components/ProfileMenu"
 import { Text } from "@/components/Text"
 import type { LiveStream } from "@/generated/schema"
 import { translate } from "@/i18n/translate"
@@ -175,7 +176,7 @@ export const MapScreen: FC = function MapScreen() {
   const handleSelectDiscoverStream = useCallback((stream: LiveStream) => {
     const lat = stream.currentLocation?.lat
     const lng = stream.currentLocation?.lng
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
+    if (typeof lat !== "number" || typeof lng !== "number") return
 
     mapRef.current?.flyTo(lng, lat, 450, 6)
   }, [])
@@ -281,21 +282,10 @@ export const MapScreen: FC = function MapScreen() {
       )}
 
       {user && appUser ? (
-        <Pressable
-          style={themed($profileBadge)}
-          onPress={() => router.push(`/(app)/user/${displayUsername}`)}
-          accessibilityRole="button"
-          accessibilityLabel={translate("userProfileScreen:viewProfile", { username: displayUsername })}
-        >
-          {profilePictureUri ? (
-            <Image source={{ uri: profilePictureUri }} style={themed($avatar)} />
-          ) : (
-            <View style={themed($avatarFallback)} />
-          )}
-          {displayUsername ? (
-            <Text text={displayUsername} size="xs" numberOfLines={1} style={themed($profileName)} />
-          ) : null}
-        </Pressable>
+        <ProfileMenu
+          profilePictureUri={profilePictureUri}
+          username={displayUsername}
+        />
       ) : (
         <Pressable
           style={themed($profileBadge)}
@@ -324,18 +314,6 @@ export const MapScreen: FC = function MapScreen() {
         >
           <Text text="-" style={themed($zoomButtonText)} />
         </Pressable>
-      </View>
-
-      {/* Overlay buttons */}
-      <View style={themed($buttonContainer)}>
-        {user ? (
-          <Button
-            tx="mapScreen:signOut"
-            preset="default"
-            onPress={signOut}
-            style={themed($mapButton)}
-          />
-        ) : null}
       </View>
 
       {/* Permission denied banner */}
@@ -392,7 +370,7 @@ const $buttonContainer: ThemedStyle<ViewStyle> = ({ spacing }) => ({
 
 const $zoomControls: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   position: "absolute",
-  top: spacing.xl + 48,
+  top: spacing.xxxl + 48,
   right: spacing.md,
   gap: spacing.xs,
 })
@@ -420,7 +398,7 @@ const $zoomButtonText: ThemedStyle<TextStyle> = ({ colors }) => ({
 
 const $profileBadge: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
   position: "absolute",
-  top: spacing.xl,
+  top: spacing.xxxl,
   right: spacing.md,
   flexDirection: "row",
   alignItems: "center",

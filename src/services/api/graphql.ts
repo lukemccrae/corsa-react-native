@@ -1,4 +1,12 @@
-import type { ChatMessage, LiveStream, Route, User } from "@/generated/schema"
+import type {
+  ChatMessage,
+  DeleteDeviceResponse,
+  DeleteRouteResponse,
+  Device,
+  LiveStream,
+  Route,
+  User,
+} from "@/generated/schema"
 
 type GraphQLError = {
   message: string
@@ -6,6 +14,22 @@ type GraphQLError = {
 
 type PublishChatResponse = {
   publishChat?: ChatMessage | null
+}
+
+type UpsertDeviceResponse = {
+  upsertDevice?: Device | null
+}
+
+type DeleteDeviceMutationResponse = {
+  deleteDevice?: DeleteDeviceResponse | null
+}
+
+type RecalibrateRouteResponse = {
+  recalibrateRoute?: Route | null
+}
+
+type DeleteRouteMutationResponse = {
+  deleteRoute?: DeleteRouteResponse | null
 }
 
 type GetUserByUserIdResponse = {
@@ -61,6 +85,17 @@ const USER_PROFILE_FIELDS = `
   coverImagePath
   live
   streamId
+  devices {
+    imei
+    deviceId
+    name
+    make
+    model
+    shareUrl
+    status
+    lastSeenAt
+    verifiedAt
+  }
   liveStreams {
     streamId
     title
@@ -302,6 +337,7 @@ function normalizeUserImagePaths(user: User): User {
     ...user,
     profilePicture: resolveCloudFrontUrl(user.profilePicture),
     coverImagePath: resolveCloudFrontUrl(user.coverImagePath),
+    devices: user.devices?.map((device) => device ?? null) ?? null,
     liveStreams: user.liveStreams?.map((stream) => normalizeLiveStream(stream ?? null)) ?? null,
     routes: user.routes?.map((route) => normalizeRoute(route ?? null)) ?? null,
   }
@@ -477,6 +513,62 @@ const PUBLISH_CHAT_MUTATION = `
   }
 `
 
+const UPSERT_DEVICE_MUTATION = `
+  mutation UpsertDevice($input: DeviceInput!) {
+    upsertDevice(input: $input) {
+      imei
+      deviceId
+      name
+      make
+      model
+      shareUrl
+      status
+      lastSeenAt
+      verifiedAt
+    }
+  }
+`
+
+const DELETE_DEVICE_MUTATION = `
+  mutation DeleteDevice($input: DeleteDeviceInput!) {
+    deleteDevice(input: $input) {
+      success
+      message
+    }
+  }
+`
+
+const RECALIBRATE_ROUTE_MUTATION = `
+  mutation RecalibrateRoute($input: RecalibrateRouteInput!) {
+    recalibrateRoute(input: $input) {
+      routeId
+      name
+      distanceInMiles
+      gainInFeet
+      storagePath
+      overlayPath
+      processingStatus
+      createdAt
+      uom
+      publicUser {
+        profilePicture
+        username
+        userId
+        bio
+      }
+    }
+  }
+`
+
+const DELETE_ROUTE_MUTATION = `
+  mutation DeleteRoute($input: DeleteRouteInput!) {
+    deleteRoute(input: $input) {
+      success
+      message
+    }
+  }
+`
+
 async function executeTokenMutation<TData>(
   query: string,
   variables: Record<string, unknown>,
@@ -537,4 +629,87 @@ export async function publishChatMessage(
     ...result.publishChat,
     publicUser: normalizePublicUserImagePaths(result.publishChat.publicUser),
   }
+}
+
+export type UpsertDeviceInput = {
+  userId: string
+  imei: string
+  name: string
+  make: string
+  model?: string | null
+  shareUrl?: string | null
+}
+
+export async function upsertDevice(input: UpsertDeviceInput, idToken: string): Promise<Device> {
+  const result = await executeTokenMutation<UpsertDeviceResponse>(
+    UPSERT_DEVICE_MUTATION,
+    {
+      input: {
+        userId: input.userId,
+        IMEI: input.imei,
+        name: input.name,
+        make: input.make.toUpperCase(),
+        model: input.model ?? "",
+        shareUrl: input.shareUrl ?? undefined,
+        lastLocation: { lat: 0, lng: 0 },
+        timestamp: new Date().toISOString(),
+      },
+    },
+    idToken,
+  )
+
+  if (!result.upsertDevice) {
+    throw new Error("upsertDevice returned no data")
+  }
+
+  return result.upsertDevice
+}
+
+export async function deleteDevice(deviceId: string, idToken: string): Promise<boolean> {
+  const result = await executeTokenMutation<DeleteDeviceMutationResponse>(
+    DELETE_DEVICE_MUTATION,
+    { input: { deviceId } },
+    idToken,
+  )
+
+  return result.deleteDevice?.success === true
+}
+
+export type RecalibrateRouteInput = {
+  createdAt: string
+  routeId: string
+  targetDistanceInMiles: number
+  targetGainInFeet: number
+  userId: string
+}
+
+export async function recalibrateRoute(
+  input: RecalibrateRouteInput,
+  idToken: string,
+): Promise<Route> {
+  const result = await executeTokenMutation<RecalibrateRouteResponse>(
+    RECALIBRATE_ROUTE_MUTATION,
+    { input },
+    idToken,
+  )
+
+  const route = normalizeRoute(result.recalibrateRoute ?? null)
+  if (!route) {
+    throw new Error("recalibrateRoute returned no data")
+  }
+
+  return route
+}
+
+export async function deleteRoute(
+  input: { createdAt: string; routeId: string },
+  idToken: string,
+): Promise<boolean> {
+  const result = await executeTokenMutation<DeleteRouteMutationResponse>(
+    DELETE_ROUTE_MUTATION,
+    { input },
+    idToken,
+  )
+
+  return result.deleteRoute?.success === true
 }
