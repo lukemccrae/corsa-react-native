@@ -16,6 +16,7 @@ import { useRouter } from "expo-router"
 import { Button } from "@/components/Button"
 import { MapLibreMap, MapLibreMapRef } from "@/components/Map/MapLibreMap"
 import { Text } from "@/components/Text"
+import { translate } from "@/i18n/translate"
 import { useAuth } from "@/providers/AuthProvider"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
@@ -89,7 +90,7 @@ export const MapScreen: FC = function MapScreen() {
           style={themed($profileBadge)}
           onPress={() => router.push(`/(app)/user/${displayUsername}`)}
           accessibilityRole="button"
-          accessibilityLabel={`View profile for ${displayUsername}`}
+          accessibilityLabel={translate("userProfileScreen:viewProfile", { username: displayUsername })}
         >
           {profilePictureUri ? (
             <Image source={{ uri: profilePictureUri }} style={themed($avatar)} />

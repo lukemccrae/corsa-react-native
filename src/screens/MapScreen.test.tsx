@@ -105,7 +105,7 @@ describe("MapScreen", () => {
     const { getByLabelText } = render(<MapScreen />)
     await act(async () => {})
 
-    const badge = getByLabelText("View profile for testuser")
+    const badge = getByLabelText("userProfileScreen:viewProfile")
     fireEvent.press(badge)
 
     expect(mockPush).toHaveBeenCalledWith("/(app)/user/testuser")

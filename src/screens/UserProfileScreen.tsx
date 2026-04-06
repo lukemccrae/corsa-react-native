@@ -3,6 +3,7 @@ import { Image, ImageStyle, TextStyle, View, ViewStyle } from "react-native"
 
 import { Screen } from "@/components/Screen"
 import { Text } from "@/components/Text"
+import { translate } from "@/i18n/translate"
 import { useAuth } from "@/providers/AuthProvider"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
@@ -24,7 +25,11 @@ export const UserProfileScreen: FC<UserProfileScreenProps> = function UserProfil
   const bio = profileData?.bio
 
   return (
-    <Screen preset="scroll" contentContainerStyle={themed($container)}>
+    <Screen
+      preset="scroll"
+      contentContainerStyle={themed($container)}
+      accessibilityLabel={translate("userProfileScreen:viewProfile", { username })}
+    >
       <View style={themed($avatarWrapper)}>
         {profilePictureUri ? (
           <Image
@@ -40,7 +45,7 @@ export const UserProfileScreen: FC<UserProfileScreenProps> = function UserProfil
 
       <Text text={username} preset="heading" style={themed($username)} />
 
-      {bio !== undefined && (
+      {profileData !== null && (
         <View style={themed($bioSection)}>
           <Text tx="userProfileScreen:bio" preset="formLabel" style={themed($bioLabel)} />
           <Text
