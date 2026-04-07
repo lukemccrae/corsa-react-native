@@ -48,6 +48,17 @@ export type ChatMessage = {
   userId: Scalars['ID']['output'];
 };
 
+/**
+ *   -----------------------
+ *  LiveStream
+ *  -----------------------
+ */
+export type ChatMessageConnection = {
+  __typename?: 'ChatMessageConnection';
+  items: Array<ChatMessage>;
+  nextToken?: Maybe<Scalars['String']['output']>;
+};
+
 export type ChatMessageInput = {
   createdAt: Scalars['String']['input'];
   profilePicture: Scalars['String']['input'];
@@ -210,14 +221,9 @@ export type LatLngInput = {
   lng: Scalars['Float']['input'];
 };
 
-/**
- *   -----------------------
- *  LiveStream
- *  -----------------------
- */
 export type LiveStream = {
   __typename?: 'LiveStream';
-  chatMessages?: Maybe<Array<Maybe<ChatMessage>>>;
+  chatMessages?: Maybe<ChatMessageConnection>;
   currentLocation?: Maybe<LatLng>;
   currentPointIndex?: Maybe<Scalars['Int']['output']>;
   delayInSeconds?: Maybe<Scalars['Int']['output']>;
@@ -238,6 +244,12 @@ export type LiveStream = {
   title: Scalars['String']['output'];
   unitOfMeasure?: Maybe<UnitOfMeasure>;
   waypoints?: Maybe<Array<Maybe<Waypoint>>>;
+};
+
+
+export type LiveStreamChatMessagesArgs = {
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  nextToken?: InputMaybe<Scalars['String']['input']>;
 };
 
 export type LiveStreamInput = {

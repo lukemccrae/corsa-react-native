@@ -1,7 +1,7 @@
 schema:
   - ${EXPO_PUBLIC_APPSYNC_ENDPOINT}:
       headers:
-        x-api-key: ${APPSYNC_API_KEY}
+        x-api-key: ${EXPO_PUBLIC_APPSYNC_API_KEY}
 
 generates:
   src/generated/schema.ts:
