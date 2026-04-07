@@ -238,12 +238,22 @@ export const UserProfileScreen: FC<UserProfileScreenProps> = function UserProfil
             <Text text={`@${username}`} preset="subheading" />
             {isOwnProfile ? <Text text="Your profile" size="xs" style={themed($subtleText)} /> : null}
           </View>
-          <Button
-            text="Back to map"
-            preset="default"
-            onPress={() => router.replace("/(app)")}
-            style={themed($backButton)}
-          />
+          <View style={themed($headerActions)}>
+            {isOwnProfile ? (
+              <Button
+                text="Settings"
+                preset="default"
+                onPress={() => router.push("/(app)/settings")}
+                style={themed($backButton)}
+              />
+            ) : null}
+            <Button
+              text="Back to map"
+              preset="default"
+              onPress={() => router.replace("/(app)")}
+              style={themed($backButton)}
+            />
+          </View>
         </View>
 
         <View style={themed($bioSection)}>
@@ -470,6 +480,10 @@ const $titleRow: ThemedStyle<ViewStyle> = ({ spacing }) => ({
 const $titleCopy: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   flex: 1,
   gap: spacing.xxs,
+})
+
+const $headerActions: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  gap: spacing.xs,
 })
 
 const $backButton: ThemedStyle<ViewStyle> = () => ({

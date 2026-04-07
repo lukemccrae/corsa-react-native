@@ -26,8 +26,7 @@ interface MenuItemConfig {
 }
 
 type AppRoutes = 
-  | "/(app)/routes" 
-  | "/(app)/devices" 
+  | "/(app)/settings"
   | `/(app)/user/${string}`
 
 export const ProfileMenu: React.FC<{
@@ -79,12 +78,8 @@ export const ProfileMenu: React.FC<{
 
   const menuItems: MenuItemConfig[] = [
     {
-      label: translate("profileMenu:routes"),
-      onPress: () => navigateTo("/(app)/routes" as AppRoutes),
-    },
-    {
-      label: translate("profileMenu:devices"),
-      onPress: () => navigateTo("/(app)/devices" as AppRoutes),
+      label: "Settings",
+      onPress: () => navigateTo("/(app)/settings" as AppRoutes),
     },
     {
       label: translate("profileMenu:myProfile"),

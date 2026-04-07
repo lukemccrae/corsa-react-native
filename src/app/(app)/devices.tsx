@@ -12,6 +12,7 @@ import {
   View,
   ViewStyle,
 } from "react-native"
+import { useRouter } from "expo-router"
 
 import { Button } from "@/components/Button"
 import { Screen } from "@/components/Screen"
@@ -61,6 +62,7 @@ function createEmptyForm(): DeviceFormState {
 
 export const DevicesScreen: FC = function DevicesScreen() {
   const { themed } = useAppTheme()
+  const router = useRouter()
   const { user, appUser } = useAuth()
   const [devices, setDevices] = useState<Device[]>([])
   const [loading, setLoading] = useState(true)
@@ -222,10 +224,22 @@ export const DevicesScreen: FC = function DevicesScreen() {
     </View>
   )
 
+  const handleBackToMap = useCallback(() => {
+    router.replace("/(app)/settings")
+  }, [router])
+
   return (
     <Screen preset="fixed" safeAreaEdges={["top"]} contentContainerStyle={themed($container)}>
       <View style={themed($header)}>
-        <Text preset="heading" text="Devices" />
+        <View style={themed($headerRow)}>
+          <Text preset="heading" text="Devices" />
+          <Button
+            text="Back to settings"
+            preset="default"
+            onPress={handleBackToMap}
+            style={themed($backButton)}
+          />
+        </View>
       </View>
 
       <Button
@@ -331,6 +345,17 @@ const $container: ThemedStyle<ViewStyle> = ({ spacing }) => ({
 
 const $header: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   marginBottom: spacing.lg,
+})
+
+const $headerRow: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: spacing.sm,
+})
+
+const $backButton: ThemedStyle<ViewStyle> = () => ({
+  flexShrink: 1,
 })
 
 const $registerButton: ThemedStyle<ViewStyle> = ({ spacing }) => ({

@@ -109,6 +109,10 @@ export const RoutesScreen: FC = function RoutesScreen() {
     [appUser?.username, router],
   )
 
+  const handleBackToMap = useCallback(() => {
+    router.replace("/(app)/settings")
+  }, [router])
+
   const handleRecalibrate = useCallback(async () => {
     if (!user || !appUser?.userId || !selectedRoute) {
       Alert.alert("Error", "You must be signed in to edit routes.")
@@ -183,7 +187,15 @@ export const RoutesScreen: FC = function RoutesScreen() {
   return (
     <Screen preset="fixed" safeAreaEdges={["top"]} contentContainerStyle={themed($container)}>
       <View style={themed($header)}>
-        <Text preset="heading" text="Routes" />
+        <View style={themed($headerRow)}>
+          <Text preset="heading" text="Routes" />
+          <Button
+            text="Back to settings"
+            preset="default"
+            onPress={handleBackToMap}
+            style={themed($backButton)}
+          />
+        </View>
       </View>
 
       <Button
@@ -320,6 +332,17 @@ const $container: ThemedStyle<ViewStyle> = ({ spacing }) => ({
 
 const $header: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   marginBottom: spacing.lg,
+})
+
+const $headerRow: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: spacing.sm,
+})
+
+const $backButton: ThemedStyle<ViewStyle> = () => ({
+  flexShrink: 1,
 })
 
 const $uploadButton: ThemedStyle<ViewStyle> = ({ spacing }) => ({

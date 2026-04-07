@@ -18,6 +18,7 @@ import { Screen } from "@/components/Screen"
 import { Text } from "@/components/Text"
 import { Button } from "@/components/Button"
 import { useAuth } from "@/providers/AuthProvider"
+import { fetchUserProfileByUsername } from "@/services/api/graphql"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
 import type { LiveStream, Device } from "@/generated/schema"
@@ -49,26 +50,47 @@ export const StreamsScreen: FC = function StreamsScreen() {
   })
   const [errors, setErrors] = useState<{ title?: string }>({})
 
-  useEffect(() => {
-    loadStreams()
-  }, [])
-
-  const loadStreams = async () => {
-    try {
-      // TODO: Fetch user's streams from API
-      // Fetch devices too
+  const loadStreams = useCallback(async () => {
+    if (!appUser?.username) {
+      setStreams([])
+      setDevices([])
       setLoading(false)
+      return
+    }
+
+    try {
+      const profile = await fetchUserProfileByUsername(appUser.username)
+      const fetchedStreams = (profile?.liveStreams ?? []).filter((entry): entry is LiveStream => Boolean(entry))
+      const fetchedDevices = (profile?.devices ?? []).filter((entry): entry is Device => Boolean(entry))
+
+      setStreams(
+        fetchedStreams
+          .slice()
+          .sort(
+            (left, right) =>
+              new Date(right.startTime ?? right.finishTime ?? 0).getTime() -
+              new Date(left.startTime ?? left.finishTime ?? 0).getTime(),
+          ),
+      )
+      setDevices(fetchedDevices)
     } catch (error) {
       console.error("Error loading streams:", error)
+      setStreams([])
+      setDevices([])
+    } finally {
       setLoading(false)
     }
-  }
+  }, [appUser?.username])
+
+  useEffect(() => {
+    void loadStreams()
+  }, [loadStreams])
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true)
     await loadStreams()
     setRefreshing(false)
-  }, [])
+  }, [loadStreams])
 
   const resetForm = () => {
     setFormData({
@@ -117,7 +139,10 @@ export const StreamsScreen: FC = function StreamsScreen() {
       contentContainerStyle={themed($container)}
     >
       <View style={themed($header)}>
-        <Text preset="heading" text="Streams" />
+        <View style={themed($headerRow)}>
+          <Text preset="heading" text="Streams" />
+          <Button text="Back to settings" preset="default" onPress={() => router.replace("/(app)/settings")} />
+        </View>
       </View>
 
       <Button
@@ -261,11 +286,12 @@ export const StreamsScreen: FC = function StreamsScreen() {
           keyExtractor={(item) => item.streamId}
           renderItem={({ item }) => (
             <Pressable
-              onPress={() =>
-                router.push(
-                  `/(app)/user/${item.publicUser?.username}/stream/${item.streamId}`
-                )
-              }
+              onPress={() => {
+                const username = item.publicUser?.username ?? appUser?.username
+                if (!username) return
+
+                router.push(`/(app)/user/${username}/stream/${item.streamId}`)
+              }}
               style={themed($streamItem)}
             >
               <View style={themed($itemHeader)}>
@@ -298,6 +324,13 @@ const $container: ThemedStyle<ViewStyle> = ({ spacing }) => ({
 
 const $header: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   marginBottom: spacing.lg,
+})
+
+const $headerRow: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: spacing.sm,
 })
 
 const $createButton: ThemedStyle<ViewStyle> = ({ spacing }) => ({
