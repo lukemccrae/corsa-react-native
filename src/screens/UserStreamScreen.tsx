@@ -5,6 +5,7 @@ import {
   Image,
   ImageStyle,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -79,7 +80,7 @@ type StreamPostEntry = Post & {
   text?: string | null
   imagePath?: string | null
   images?: Array<string | null> | null
-  media?: Array<{ path: string } | null> | null
+  media?: Array<{ path: string; type?: string | null; contentType?: string | null } | null> | null
 }
 
 function hasCoordinate(value: number | null | undefined): value is number {
@@ -110,6 +111,24 @@ function getPostMediaLabel(post: StreamPostEntry) {
 
   return null
 }
+
+function getPostImageUrls(post: StreamPostEntry) {
+  const imagePathsFromPhotoPost = post.images?.filter(Boolean).map((path) => path as string) ?? []
+  const imagePathFromStatusPost = post.imagePath ? [post.imagePath] : []
+  const imagePathsFromMedia =
+    post.media
+      ?.filter(Boolean)
+      .filter((mediaItem) => {
+        const normalizedType = mediaItem?.type?.toLowerCase()
+        return normalizedType === "image" || mediaItem?.contentType?.toLowerCase().startsWith("image/")
+      })
+      .map((mediaItem) => mediaItem!.path)
+      .filter(Boolean) ?? []
+
+  return [...new Set([...imagePathsFromPhotoPost, ...imagePathFromStatusPost, ...imagePathsFromMedia])]
+}
+
+const DEFAULT_MAP_POST_IMAGE_ASPECT_RATIO = 4 / 3
 
 function getInitialZoomLevel(points: MapCoordinate[]) {
   if (points.length <= 1) return 11
@@ -248,7 +267,7 @@ function LiveChatSection({ streamId, messages: initialMessages }: LiveChatSectio
 
   return (
     <View style={themed($chatCard)}>
-      <Text text="Live Chat" preset="subheading" size="sm" style={themed($chatHeading)} />
+      <Text text="Chat" preset="subheading" size="sm" style={themed($chatHeading)} />
 
       <ScrollView
         ref={scrollRef}
@@ -322,25 +341,75 @@ function LiveChatSection({ streamId, messages: initialMessages }: LiveChatSectio
   )
 }
 
-function PostCard({ post }: { post: StreamPostEntry }) {
+function PostCard({ post, onPressImage }: { post: StreamPostEntry; onPressImage: (imageUrl: string) => void }) {
   const latitude = post.location?.lat
   const longitude = post.location?.lng
+  const postTypeLabel = post.type === "STATUS" ? null : post.type
+  const createdAtLabel = formatDateTime(post.createdAt) || ""
   const coordinateLabel =
     hasCoordinate(latitude) && hasCoordinate(longitude)
       ? formatCoordinateLabel(latitude, longitude)
       : null
   const mediaLabel = getPostMediaLabel(post)
+  const imageUrls = getPostImageUrls(post)
+  const primaryImageUrl = imageUrls[0] ?? null
+  const additionalImageUrls = imageUrls.slice(1)
 
   return (
     <View style={$postCard}>
       <View style={$postHeader}>
-        <Text text={post.type} weight="medium" size="xs" />
-        <Text text={formatDateTime(post.createdAt) || ""} size="xxs" style={$postMeta} />
+        <View style={$postHeaderLeft}>
+          {postTypeLabel ? (
+            <View style={$postTypePill}>
+              <Text text={postTypeLabel} weight="medium" size="xxs" style={$postTypePillText} />
+            </View>
+          ) : null}
+        </View>
+        <Text text={createdAtLabel} size="xxs" style={$postTimestamp} />
       </View>
+      {primaryImageUrl ? (
+        <Pressable
+          onPress={() => onPressImage(primaryImageUrl)}
+          style={({ pressed }) => [$postHeroImageFrame, pressed && $postImageTilePressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Open post photo"
+        >
+          <Image source={{ uri: primaryImageUrl }} style={$postImage} resizeMode="contain" />
+        </Pressable>
+      ) : null}
       <Text text={getPostText(post)} size="xs" style={$postText} />
+      {additionalImageUrls.length > 0 ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={$postImageRow}
+          accessibilityRole="image"
+          accessibilityLabel="Additional post photos"
+        >
+          {additionalImageUrls.map((imageUrl, index) => (
+            <Pressable
+              key={`${post.userId}-${post.createdAt}-image-${index + 1}`}
+              onPress={() => onPressImage(imageUrl)}
+              style={({ pressed }) => [$postImageTile, pressed && $postImageTilePressed]}
+              accessibilityRole="button"
+              accessibilityLabel="Open post photo"
+            >
+              <Image source={{ uri: imageUrl }} style={$postImage} resizeMode="contain" />
+            </Pressable>
+          ))}
+        </ScrollView>
+      ) : null}
       <View style={$postFooter}>
-        {coordinateLabel ? <Text text={`Pinned to map • ${coordinateLabel}`} size="xxs" style={$postMeta} /> : null}
-        {mediaLabel ? <Text text={mediaLabel} size="xxs" style={$postMeta} /> : null}
+        {coordinateLabel ? (
+          <View style={$postMetaChip}>
+            <Text text={`Pinned ${coordinateLabel}`} size="xxs" style={$postMetaChipText} />
+          </View>
+        ) : null}
+        {mediaLabel ? (
+          <View style={$postMetaChip}>
+            <Text text={mediaLabel} size="xxs" style={$postMetaChipText} />
+          </View>
+        ) : null}
       </View>
     </View>
   )
@@ -363,6 +432,47 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
   const [trackingBusy, setTrackingBusy] = useState(false)
   const [trackingError, setTrackingError] = useState<string | null>(null)
   const [localWaypointRefreshTick, setLocalWaypointRefreshTick] = useState(0)
+  const [selectedPostImageUrl, setSelectedPostImageUrl] = useState<string | null>(null)
+  const [selectedMapPostMarker, setSelectedMapPostMarker] = useState<StreamPostMarker | null>(null)
+  const [selectedMapPostImageAspectRatio, setSelectedMapPostImageAspectRatio] = useState(
+    DEFAULT_MAP_POST_IMAGE_ASPECT_RATIO,
+  )
+
+  useEffect(() => {
+    const photoUrl = selectedMapPostMarker?.photoUrl
+    if (!photoUrl) {
+      setSelectedMapPostImageAspectRatio(DEFAULT_MAP_POST_IMAGE_ASPECT_RATIO)
+      return
+    }
+
+    let cancelled = false
+
+    Image.getSize(
+      photoUrl,
+      (width, height) => {
+        if (cancelled) return
+        if (width > 0 && height > 0) {
+          setSelectedMapPostImageAspectRatio(width / height)
+          return
+        }
+
+        setSelectedMapPostImageAspectRatio(DEFAULT_MAP_POST_IMAGE_ASPECT_RATIO)
+      },
+      () => {
+        if (cancelled) return
+        setSelectedMapPostImageAspectRatio(DEFAULT_MAP_POST_IMAGE_ASPECT_RATIO)
+      },
+    )
+
+    return () => {
+      cancelled = true
+    }
+  }, [selectedMapPostMarker?.photoUrl])
+
+  const mapPostModalImageFrameDynamicStyle = useMemo<ViewStyle>(
+    () => ({ aspectRatio: selectedMapPostImageAspectRatio }),
+    [selectedMapPostImageAspectRatio],
+  )
 
   useEffect(() => {
     let isMounted = true
@@ -594,13 +704,17 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
       posts.flatMap((post) => {
         const coordinate = toMapCoordinate(post.location?.lat, post.location?.lng)
         if (!coordinate) return []
+        const firstPhotoUrl = getPostImageUrls(post)[0]
 
         return [
           {
             id: `${post.userId}-${post.createdAt}`,
             title: getPostText(post),
+            createdAt: formatDateTime(post.createdAt) ?? post.createdAt,
+            locationLabel: formatCoordinateLabel(coordinate.latitude, coordinate.longitude),
             latitude: coordinate.latitude,
             longitude: coordinate.longitude,
+            photoUrl: firstPhotoUrl,
           },
         ]
       }),
@@ -624,11 +738,17 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
   const initialCenter = useMemo(() => getInitialCenter(mapPoints), [mapPoints])
   const initialZoomLevel = useMemo(() => getInitialZoomLevel(mapPoints), [mapPoints])
   const hasMapData = mapPoints.length > 0
+  const handleProfilePress = useCallback(() => {
+    router.replace(`/(app)/user/${username}`)
+  }, [router, username])
+  const handleBackToMapPress = useCallback(() => {
+    router.replace("/(app)")
+  }, [router])
 
   return (
     <Screen preset="scroll" contentContainerStyle={themed($screenContainer)}>
-      <View style={themed($topRow)}>
-        <Button text="Back to profile" onPress={() => router.replace(`/(app)/user/${username}`)} />
+      <View style={themed($topActionsRow)}>
+        <Button text="Back to map" preset="default" onPress={handleBackToMapPress} />
       </View>
 
       {loading ? (
@@ -656,7 +776,14 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
               )}
               <View style={themed($heroCopy)}>
                 <Text text={stream.title} preset="subheading" />
-                <Text text={`@${username}`} size="xs" style={themed($subtleText)} />
+                <Pressable
+                  onPress={handleProfilePress}
+                  accessibilityRole="link"
+                  accessibilityLabel={`View profile for ${username}`}
+                  hitSlop={8}
+                >
+                  <Text text={`@${username}`} size="sm" weight="bold" style={themed($profileUsernameLink)} />
+                </Pressable>
               </View>
               <View style={themed($statusBadge)}>
                 <Text text={getStatus(stream)} size="xxs" weight="medium" style={themed($statusText)} />
@@ -776,24 +903,11 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
                     trackCoordinates={trackCoordinates}
                     waypointMarkers={waypointMarkers}
                     postMarkers={postMarkers}
+                    onPostMarkerPress={(marker) => {
+                      setSelectedMapPostMarker(marker)
+                    }}
                     currentLocationMarker={currentLocationMarker}
                   />
-                </View>
-                <View style={themed($mapLegend)}>
-                  <View style={themed($legendItem)}>
-                    <View style={themed($legendSwatchTrack)} />
-                    <Text text="Track points" size="xxs" />
-                  </View>
-                  <View style={themed($legendItem)}>
-                    <View style={themed($legendSwatchPost)} />
-                    <Text text="Posts" size="xxs" />
-                  </View>
-                  {currentLocationMarker ? (
-                    <View style={themed($legendItem)}>
-                      <View style={themed($legendSwatchCurrent)} />
-                      <Text text="Current location" size="xxs" />
-                    </View>
-                  ) : null}
                 </View>
               </View>
             ) : (
@@ -802,6 +916,8 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
               </View>
             )}
           </View>
+
+          <LiveChatSection streamId={streamId} messages={chatMessages} />
 
           <View style={themed($section)}>
             <View style={themed($sectionHeader)}>
@@ -813,13 +929,90 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
             ) : (
               <View style={themed($postList)}>
                 {posts.map((post) => (
-                  <PostCard key={`${post.userId}-${post.createdAt}`} post={post} />
+                  <PostCard
+                    key={`${post.userId}-${post.createdAt}`}
+                    post={post}
+                    onPressImage={(imageUrl) => setSelectedPostImageUrl(imageUrl)}
+                  />
                 ))}
               </View>
             )}
           </View>
 
-          <LiveChatSection streamId={streamId} messages={chatMessages} />
+          <Modal
+            visible={Boolean(selectedMapPostMarker)}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setSelectedMapPostMarker(null)}
+          >
+            <Pressable
+              style={themed($mapPostModalBackdrop)}
+              onPress={() => setSelectedMapPostMarker(null)}
+              accessibilityRole="button"
+              accessibilityLabel="Close post details"
+            >
+              {selectedMapPostMarker ? (
+                <Pressable
+                  style={themed($mapPostModalCard)}
+                  onPress={(event) => event.stopPropagation()}
+                  accessibilityRole="summary"
+                  accessibilityLabel="Map post details"
+                >
+                  <Text text={selectedMapPostMarker.title} size="xs" style={themed($mapPostModalBody)} />
+                  {selectedMapPostMarker.createdAt ? (
+                    <Text
+                      text={`Posted ${selectedMapPostMarker.createdAt}`}
+                      size="xxs"
+                      style={themed($mapPostModalMeta)}
+                    />
+                  ) : null}
+                  {selectedMapPostMarker.locationLabel ? (
+                    <Text
+                      text={`Location ${selectedMapPostMarker.locationLabel}`}
+                      size="xxs"
+                      style={themed($mapPostModalMeta)}
+                    />
+                  ) : null}
+                  {selectedMapPostMarker.photoUrl ? (
+                    <Pressable
+                      onPress={() => setSelectedPostImageUrl(selectedMapPostMarker.photoUrl ?? null)}
+                      style={({ pressed }) => [
+                        themed($mapPostModalImageFrame),
+                        mapPostModalImageFrameDynamicStyle,
+                        pressed && $mapPostModalImageFramePressed,
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel="Open post photo full screen"
+                    >
+                      <Image
+                        source={{ uri: selectedMapPostMarker.photoUrl }}
+                        style={$mapPostModalImage}
+                        resizeMode="contain"
+                      />
+                    </Pressable>
+                  ) : null}
+                </Pressable>
+              ) : null}
+            </Pressable>
+          </Modal>
+
+          <Modal
+            visible={Boolean(selectedPostImageUrl)}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setSelectedPostImageUrl(null)}
+          >
+            <Pressable
+              style={themed($postImageModalBackdrop)}
+              onPress={() => setSelectedPostImageUrl(null)}
+              accessibilityRole="button"
+              accessibilityLabel="Close photo preview"
+            >
+              {selectedPostImageUrl ? (
+                <Image source={{ uri: selectedPostImageUrl }} style={themed($postImageModalImage)} resizeMode="contain" />
+              ) : null}
+            </Pressable>
+          </Modal>
         </>
       )}
     </Screen>
@@ -828,32 +1021,166 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
 
 const $postCard: ViewStyle = {
   borderWidth: 1,
-  borderColor: "#D4D7DD",
-  borderRadius: 14,
-  padding: 14,
-  gap: 8,
+  borderColor: "#D8DEE8",
+  borderRadius: 18,
+  padding: 16,
+  gap: 10,
   backgroundColor: "#FFFFFF",
+  shadowColor: "#0F172A",
+  shadowOffset: { width: 0, height: 8 },
+  shadowOpacity: 0.08,
+  shadowRadius: 16,
+  elevation: 3,
 }
 
 const $postHeader: ViewStyle = {
   flexDirection: "row",
   justifyContent: "space-between",
   alignItems: "center",
-  gap: 12,
+  gap: 10,
+}
+
+const $postHeaderLeft: ViewStyle = {
+  flexDirection: "row",
+  alignItems: "center",
+  flexWrap: "wrap",
+  gap: 8,
 }
 
 const $postText: TextStyle = {
-  color: "#212731",
+  color: "#1F2937",
+  lineHeight: 20,
 }
 
-const $postMeta: TextStyle = {
-  color: "#5B6472",
+const $postTimestamp: TextStyle = {
+  color: "#6B7280",
 }
 
 const $postFooter: ViewStyle = {
   flexDirection: "row",
   flexWrap: "wrap",
-  gap: 12,
+  gap: 8,
+}
+
+const $postImageRow: ViewStyle = {
+  gap: 10,
+  paddingTop: 2,
+}
+
+const $postImageTile: ViewStyle = {
+  width: 108,
+  height: 132,
+  borderRadius: 12,
+  overflow: "hidden",
+  backgroundColor: "#F8FAFC",
+  borderWidth: 1,
+  borderColor: "#E5E7EB",
+}
+
+const $postHeroImageFrame: ViewStyle = {
+  width: "100%",
+  height: 320,
+  borderRadius: 16,
+  overflow: "hidden",
+  borderWidth: 1,
+  borderColor: "#E5E7EB",
+  backgroundColor: "#F8FAFC",
+}
+
+const $postImageTilePressed: ViewStyle = {
+  opacity: 0.85,
+}
+
+const $postImage: ImageStyle = {
+  width: "100%",
+  height: "100%",
+}
+
+const $postTypePill: ViewStyle = {
+  borderRadius: 999,
+  paddingHorizontal: 10,
+  paddingVertical: 4,
+  backgroundColor: "#EEF2FF",
+}
+
+const $postTypePillText: TextStyle = {
+  color: "#3730A3",
+}
+
+const $postMetaChip: ViewStyle = {
+  borderRadius: 999,
+  paddingHorizontal: 10,
+  paddingVertical: 5,
+  borderWidth: 1,
+  borderColor: "#E5E7EB",
+  backgroundColor: "#F9FAFB",
+}
+
+const $postMetaChipText: TextStyle = {
+  color: "#4B5563",
+}
+
+const $postImageModalBackdrop: ThemedStyle<ViewStyle> = ({ colors }) => ({
+  flex: 1,
+  backgroundColor: `${colors.palette.neutral900}E6`,
+  alignItems: "center",
+  justifyContent: "center",
+  padding: 20,
+})
+
+const $postImageModalImage: ThemedStyle<ImageStyle> = () => ({
+  width: "100%",
+  height: "100%",
+  maxHeight: "85%",
+})
+
+const $mapPostModalBackdrop: ThemedStyle<ViewStyle> = ({ colors }) => ({
+  flex: 1,
+  backgroundColor: `${colors.palette.neutral900}99`,
+  padding: 20,
+  justifyContent: "center",
+})
+
+const $mapPostModalCard: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
+  borderRadius: 16,
+  backgroundColor: colors.background,
+  borderWidth: 1,
+  borderColor: colors.palette.neutral300,
+  padding: spacing.md,
+  gap: spacing.xs,
+})
+
+const $mapPostModalHeading: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.text,
+})
+
+const $mapPostModalBody: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.text,
+})
+
+const $mapPostModalMeta: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.textDim,
+})
+
+const $mapPostModalImageFrame: ThemedStyle<ViewStyle> = ({ colors }) => ({
+  marginTop: 4,
+  width: "100%",
+  minHeight: 140,
+  maxHeight: 320,
+  borderRadius: 12,
+  overflow: "hidden",
+  borderWidth: 1,
+  borderColor: colors.palette.neutral300,
+  backgroundColor: colors.palette.neutral200,
+})
+
+const $mapPostModalImageFramePressed: ViewStyle = {
+  opacity: 0.85,
+}
+
+const $mapPostModalImage: ImageStyle = {
+  width: "100%",
+  height: "100%",
 }
 
 const $screenContainer: ThemedStyle<ViewStyle> = ({ spacing }) => ({
@@ -862,7 +1189,7 @@ const $screenContainer: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   gap: spacing.md,
 })
 
-const $topRow: ThemedStyle<ViewStyle> = () => ({
+const $topActionsRow: ThemedStyle<ViewStyle> = () => ({
   alignItems: "flex-start",
 })
 
@@ -895,6 +1222,10 @@ const $heroHeader: ThemedStyle<ViewStyle> = ({ spacing }) => ({
 const $heroCopy: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   flex: 1,
   gap: spacing.xxxs,
+})
+
+const $profileUsernameLink: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.tint,
 })
 
 const $avatar: ThemedStyle<ImageStyle> = () => ({

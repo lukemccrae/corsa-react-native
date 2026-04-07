@@ -34,6 +34,7 @@ interface MapLibreMapProps {
   trackCoordinates?: MapCoordinate[]
   waypointMarkers?: StreamWaypointMarker[]
   postMarkers?: StreamPostMarker[]
+  onPostMarkerPress?: (marker: StreamPostMarker) => void
   currentLocationMarker?: MapCoordinate | null
   initialCenter?: MapCoordinate
   initialZoomLevel?: number
@@ -61,6 +62,9 @@ export interface StreamWaypointMarker extends MapCoordinate {
 export interface StreamPostMarker extends MapCoordinate {
   id: string
   title: string
+  createdAt?: string
+  locationLabel?: string
+  photoUrl?: string
 }
 
 /**
@@ -75,6 +79,7 @@ export const MapLibreMap = forwardRef<MapLibreMapRef, MapLibreMapProps>(function
     trackCoordinates = [],
     waypointMarkers = [],
     postMarkers = [],
+    onPostMarkerPress,
     currentLocationMarker = null,
     initialCenter,
     initialZoomLevel = 2,
@@ -205,7 +210,18 @@ export const MapLibreMap = forwardRef<MapLibreMapRef, MapLibreMapProps>(function
           allowOverlap={true}
           anchor={{ x: 0.5, y: 0.5 }}
         >
-          <View accessibilityLabel={marker.title} style={styles.postMarker} />
+          <Pressable
+            onPress={() => onPostMarkerPress?.(marker)}
+            accessibilityRole="button"
+            accessibilityLabel={`Open post: ${marker.title}`}
+            style={styles.postMarkerPressable}
+          >
+            {marker.photoUrl ? (
+              <Image source={{ uri: marker.photoUrl }} style={styles.postPhotoMarker} />
+            ) : (
+              <View style={styles.postMarker} />
+            )}
+          </Pressable>
         </MapLibreGL.MarkerView>
       ))}
 
@@ -268,6 +284,20 @@ const styles = StyleSheet.create({
     backgroundColor: "#f97316",
     borderWidth: 2,
     borderColor: "#ffffff",
+  },
+  postMarkerPressable: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  postPhotoMarker: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: "#ffffff",
+    backgroundColor: "#f1f5f9",
   },
   markerPressable: {
     width: 42,

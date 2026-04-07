@@ -4,6 +4,7 @@ import type {
   DeleteRouteResponse,
   Device,
   LiveStream,
+  Post,
   Route,
   User,
 } from "@/generated/schema"
@@ -350,6 +351,39 @@ function normalizePublicUserImagePaths<T extends { profilePicture: string }>(pub
   }
 }
 
+function normalizePostImagePaths<T extends Post>(post: T): T {
+  const normalizedPost = {
+    ...post,
+  } as T & {
+    imagePath?: string | null
+    images?: Array<string | null> | null
+    media?: Array<{ path?: string | null } | null> | null
+  }
+
+  if (typeof normalizedPost.imagePath === "string") {
+    normalizedPost.imagePath = resolveCloudFrontUrl(normalizedPost.imagePath)
+  }
+
+  if (Array.isArray(normalizedPost.images)) {
+    normalizedPost.images = normalizedPost.images.map((imagePath) =>
+      imagePath ? resolveCloudFrontUrl(imagePath) : imagePath,
+    )
+  }
+
+  if (Array.isArray(normalizedPost.media)) {
+    normalizedPost.media = normalizedPost.media.map((mediaItem) =>
+      mediaItem
+        ? {
+            ...mediaItem,
+            path: mediaItem.path ? resolveCloudFrontUrl(mediaItem.path) : mediaItem.path,
+          }
+        : null,
+    )
+  }
+
+  return normalizedPost
+}
+
 function normalizeRoute(route: Route | null): Route | null {
   if (!route) return null
 
@@ -368,6 +402,7 @@ function normalizeLiveStream(stream: LiveStream | null): LiveStream | null {
     ...stream,
     publicUser: stream.publicUser ? normalizePublicUserImagePaths(stream.publicUser) : stream.publicUser,
     route: normalizeRoute(stream.route ?? null),
+    posts: stream.posts?.map((post) => (post ? normalizePostImagePaths(post) : null)) ?? null,
     chatMessages:
       stream.chatMessages?.map((message) =>
         message

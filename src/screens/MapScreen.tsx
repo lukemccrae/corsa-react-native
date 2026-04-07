@@ -251,8 +251,8 @@ export const MapScreen: FC = function MapScreen() {
               return (
                 <Pressable
                   key={stream.streamId}
-                  onPress={() => handleSelectDiscoverStream(stream)}
-                  onLongPress={() => handleOpenStream(stream)}
+                  onPress={() => handleOpenStream(stream)}
+                  onLongPress={() => handleSelectDiscoverStream(stream)}
                   style={({ pressed }) => [themed($discoverItem), pressed ? themed($discoverItemPressed) : null]}
                 >
                   {stream.publicUser?.profilePicture ? (
