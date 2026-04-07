@@ -29,7 +29,11 @@ import { Button } from "@/components/Button"
 import { Screen } from "@/components/Screen"
 import { Text } from "@/components/Text"
 import type { ChatMessage, LiveStream, Post, User, Waypoint } from "@/generated/schema"
-import { fetchUserStreamById, publishChatMessage } from "@/services/api/graphql"
+import {
+  fetchUserStreamById,
+  fetchUserStreamChatMessagesPage,
+  publishChatMessage,
+} from "@/services/api/graphql"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
 import { useAuth } from "@/providers/AuthProvider"
@@ -56,13 +60,16 @@ interface UserStreamScreenProps {
 function formatDateTime(value: string | null | undefined) {
   if (!value) return null
 
+  const parsedDate = new Date(value)
+  if (Number.isNaN(parsedDate.getTime())) return null
+
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
     hour: "numeric",
     minute: "2-digit",
-  }).format(new Date(value))
+  }).format(parsedDate)
 }
 
 function formatDistance(miles: number, uom?: string | null) {
@@ -192,28 +199,70 @@ function ChatMessageItem({ message }: { message: ChatMessage }) {
 }
 
 type LiveChatSectionProps = {
+  username: string
   streamId: string
   messages: ChatMessage[]
+  nextToken: string | null
 }
 
-function LiveChatSection({ streamId, messages: initialMessages }: LiveChatSectionProps) {
+function sortMessagesChronologically(messages: ChatMessage[]) {
+  return messages
+    .slice()
+    .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())
+}
+
+function mergeUniqueMessages(messages: ChatMessage[]) {
+  const byKey = new Map<string, ChatMessage>()
+
+  messages.forEach((message) => {
+    byKey.set(`${message.createdAt}:${message.userId}:${message.text}`, message)
+  })
+
+  return sortMessagesChronologically([...byKey.values()])
+}
+
+function LiveChatSection({ username, streamId, messages: initialMessages, nextToken: initialNextToken }: LiveChatSectionProps) {
   const { themed } = useAppTheme()
   const { user, appUser } = useAuth()
   const router = useRouter()
-  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
+  const [messages, setMessages] = useState<ChatMessage[]>(sortMessagesChronologically(initialMessages))
+  const [nextToken, setNextToken] = useState<string | null>(initialNextToken)
+  const [loadingOlder, setLoadingOlder] = useState(false)
   const [text, setText] = useState("")
   const [sending, setSending] = useState(false)
   const scrollRef = useRef<ScrollView>(null)
 
   useEffect(() => {
-    setMessages(initialMessages)
-  }, [initialMessages])
+    setMessages(sortMessagesChronologically(initialMessages))
+    setNextToken(initialNextToken)
+  }, [initialMessages, initialNextToken])
 
   useEffect(() => {
     if (messages.length > 0) {
-      scrollRef.current?.scrollToEnd({ animated: true })
+      scrollRef.current?.scrollToEnd({ animated: false })
     }
-  }, [messages])
+  }, [initialMessages])
+
+  const loadOlderMessages = useCallback(async () => {
+    if (!nextToken || loadingOlder) return
+
+    setLoadingOlder(true)
+    try {
+      const page = await fetchUserStreamChatMessagesPage({
+        username,
+        streamId,
+        nextToken,
+        limit: 30,
+      })
+
+      setMessages((prev) => mergeUniqueMessages([...page.messages, ...prev]))
+      setNextToken(page.nextToken)
+    } catch (loadError) {
+      console.warn("Failed to load older chat messages", loadError)
+    } finally {
+      setLoadingOlder(false)
+    }
+  }, [loadingOlder, nextToken, streamId, username])
 
   const sendMessage = useCallback(async () => {
     const trimmed = text.trim()
@@ -234,7 +283,8 @@ function LiveChatSection({ streamId, messages: initialMessages }: LiveChatSectio
 
     setSending(true)
     setText("")
-    setMessages((prev) => [...prev, optimistic])
+    setMessages((prev) => mergeUniqueMessages([...prev, optimistic]))
+    scrollRef.current?.scrollToEnd({ animated: true })
 
     try {
       const idToken = await user.getIdToken()
@@ -250,8 +300,8 @@ function LiveChatSection({ streamId, messages: initialMessages }: LiveChatSectio
         idToken,
       )
       setMessages((prev) =>
-        prev.map((m) =>
-          m.createdAt === optimisticCreatedAt && m.text === trimmed ? saved : m,
+        mergeUniqueMessages(
+          prev.map((m) => (m.createdAt === optimisticCreatedAt && m.text === trimmed ? saved : m)),
         ),
       )
     } catch {
@@ -274,8 +324,19 @@ function LiveChatSection({ streamId, messages: initialMessages }: LiveChatSectio
         style={$chatScrollArea}
         contentContainerStyle={$chatScrollContent}
         showsVerticalScrollIndicator={false}
-        onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
+        scrollEventThrottle={16}
+        onScroll={(event) => {
+          if (event.nativeEvent.contentOffset.y <= 24) {
+            void loadOlderMessages()
+          }
+        }}
       >
+        {loadingOlder ? (
+          <Text text="Loading older messages..." size="xxs" style={themed($chatTimestamp)} />
+        ) : nextToken ? (
+          <Text text="Scroll to top to load older messages" size="xxs" style={themed($chatTimestamp)} />
+        ) : null}
+
         {messages.length === 0 ? (
           <Text text="Be the first to say hi!" size="xs" style={themed($chatEmpty)} />
         ) : (
@@ -437,6 +498,7 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
   const [selectedMapPostImageAspectRatio, setSelectedMapPostImageAspectRatio] = useState(
     DEFAULT_MAP_POST_IMAGE_ASPECT_RATIO,
   )
+  const [chatNextToken, setChatNextToken] = useState<string | null>(null)
 
   useEffect(() => {
     const photoUrl = selectedMapPostMarker?.photoUrl
@@ -484,6 +546,7 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
 
         setRouteUser(result?.user ?? null)
         setStream(result?.stream ?? null)
+        setChatNextToken(result?.chatNextToken ?? null)
         setError(null)
       } catch (loadError) {
         if (!isMounted) return
@@ -917,7 +980,12 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
             )}
           </View>
 
-          <LiveChatSection streamId={streamId} messages={chatMessages} />
+          <LiveChatSection
+            username={username}
+            streamId={streamId}
+            messages={chatMessages}
+            nextToken={chatNextToken}
+          />
 
           <View style={themed($section)}>
             <View style={themed($sectionHeader)}>

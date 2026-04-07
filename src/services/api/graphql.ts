@@ -54,6 +54,24 @@ type GetStreamsByEntityResponse = {
   errors?: GraphQLError[]
 }
 
+type GetUserStreamChatPageResponse = {
+  data?: {
+    getUserByUserName?: {
+      liveStreams?: Array<
+        | {
+            streamId: string
+            chatMessages?: {
+              items?: Array<ChatMessage | null> | null
+              nextToken?: string | null
+            } | null
+          }
+        | null
+      > | null
+    } | null
+  }
+  errors?: GraphQLError[]
+}
+
 const appSyncEndpoint =
   process.env.EXPO_PUBLIC_APPSYNC_ENDPOINT ?? process.env.APPSYNC_ENDPOINT ?? ""
 
@@ -157,7 +175,7 @@ const GET_USER_PROFILE_BY_USERNAME = `
 `
 
 const GET_USER_STREAM_BY_ID = `
-  query GetUserStreamById($username: ID!, $streamId: ID!) {
+  query GetUserStreamById($username: ID!, $streamId: ID!, $chatLimit: Int, $chatNextToken: String) {
     getUserByUserName(username: $username) {
       userId
       username
@@ -231,15 +249,45 @@ const GET_USER_STREAM_BY_ID = `
             text
           }
         }
-        chatMessages {
-          text
-          createdAt
-          publicUser {
-            username
-            profilePicture
+        chatMessages(limit: $chatLimit, nextToken: $chatNextToken) {
+          items {
+            text
+            createdAt
+            streamId
             userId
-            bio
+            publicUser {
+              username
+              profilePicture
+              userId
+              bio
+            }
           }
+          nextToken
+        }
+      }
+    }
+  }
+`
+
+const GET_USER_STREAM_CHAT_MESSAGES_PAGE = `
+  query GetUserStreamChatMessagesPage($username: ID!, $streamId: ID!, $limit: Int, $nextToken: String) {
+    getUserByUserName(username: $username) {
+      liveStreams(streamId: $streamId) {
+        streamId
+        chatMessages(limit: $limit, nextToken: $nextToken) {
+          items {
+            text
+            createdAt
+            streamId
+            userId
+            publicUser {
+              username
+              profilePicture
+              userId
+              bio
+            }
+          }
+          nextToken
         }
       }
     }
@@ -398,20 +446,28 @@ function normalizeRoute(route: Route | null): Route | null {
 function normalizeLiveStream(stream: LiveStream | null): LiveStream | null {
   if (!stream) return null
 
+  const rawChatMessages = (stream as unknown as { chatMessages?: unknown }).chatMessages
+  const chatItems = Array.isArray(rawChatMessages)
+    ? rawChatMessages
+    : Array.isArray((rawChatMessages as { items?: unknown[] } | undefined)?.items)
+      ? ((rawChatMessages as { items?: unknown[] }).items ?? [])
+      : []
+
+  const normalizedChatMessages = chatItems
+    .map((message) => message as ChatMessage | null)
+    .filter((message): message is ChatMessage => Boolean(message))
+    .map((message) => ({
+      ...message,
+      publicUser: normalizePublicUserImagePaths(message.publicUser),
+    }))
+
   return {
     ...stream,
     publicUser: stream.publicUser ? normalizePublicUserImagePaths(stream.publicUser) : stream.publicUser,
     route: normalizeRoute(stream.route ?? null),
     posts: stream.posts?.map((post) => (post ? normalizePostImagePaths(post) : null)) ?? null,
-    chatMessages:
-      stream.chatMessages?.map((message) =>
-        message
-          ? {
-              ...message,
-              publicUser: normalizePublicUserImagePaths(message.publicUser),
-            }
-          : null,
-      ) ?? null,
+    // Keep compatibility with existing UI code that expects an array-like chatMessages value.
+    chatMessages: normalizedChatMessages as unknown as LiveStream["chatMessages"],
   }
 }
 
@@ -482,21 +538,58 @@ export async function fetchUserProfileByUsername(username: string): Promise<User
 export async function fetchUserStreamById(
   username: string,
   streamId: string,
-): Promise<{ user: User; stream: LiveStream } | null> {
+): Promise<{ user: User; stream: LiveStream; chatNextToken: string | null } | null> {
   const result = await executeApiKeyQuery<GetUserByUserNameResponse["data"]>(GET_USER_STREAM_BY_ID, {
     username,
     streamId,
+    chatLimit: 30,
+    chatNextToken: null,
   })
   const user = result?.getUserByUserName ?? null
 
   if (!user) return null
+
+  const rawStream = user.liveStreams?.find((entry) => entry?.streamId === streamId) ?? null
+  const rawChatMessages = (rawStream as unknown as { chatMessages?: { nextToken?: string | null } | null })
+    ?.chatMessages
+  const chatNextToken = rawChatMessages?.nextToken ?? null
 
   const normalizedUser = normalizeUserImagePaths(user)
   const stream = normalizedUser.liveStreams?.find((entry) => entry?.streamId === streamId) ?? null
 
   if (!stream) return null
 
-  return { user: normalizedUser, stream }
+  return { user: normalizedUser, stream, chatNextToken }
+}
+
+export async function fetchUserStreamChatMessagesPage(input: {
+  username: string
+  streamId: string
+  limit?: number
+  nextToken?: string | null
+}): Promise<{ messages: ChatMessage[]; nextToken: string | null }> {
+  const result = await executeApiKeyQuery<GetUserStreamChatPageResponse["data"]>(
+    GET_USER_STREAM_CHAT_MESSAGES_PAGE,
+    {
+      username: input.username,
+      streamId: input.streamId,
+      limit: input.limit ?? 30,
+      nextToken: input.nextToken ?? null,
+    },
+  )
+
+  const stream = result?.getUserByUserName?.liveStreams?.find((entry) => entry?.streamId === input.streamId)
+  const items = stream?.chatMessages?.items ?? []
+  const nextToken = stream?.chatMessages?.nextToken ?? null
+
+  const messages = items
+    .filter((message): message is ChatMessage => Boolean(message))
+    .map((message) => ({
+      ...message,
+      publicUser: normalizePublicUserImagePaths(message.publicUser),
+    }))
+
+  return { messages, nextToken }
 }
 
 export async function fetchUserRouteById(
