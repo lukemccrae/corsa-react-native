@@ -263,11 +263,11 @@ const styles = StyleSheet.create({
     lineJoin: "round",
   },
   waypointCircle: {
-    circleRadius: 3,
-    circleColor: "#f8fafc",
-    circleStrokeWidth: 1.5,
+    circleRadius: 6,
+    circleColor: "#ffffff",
+    circleStrokeWidth: 2,
     circleStrokeColor: "#0f172a",
-    circleOpacity: 0.95,
+    circleOpacity: 1,
   },
   currentLocationMarker: {
     width: 18,

@@ -100,6 +100,10 @@ function toMapCoordinate(latitude: number | null | undefined, longitude: number 
   return { latitude, longitude }
 }
 
+function hasValidWaypointCoordinate(waypoint: { lat: number | null | undefined; lng: number | null | undefined }) {
+  return hasCoordinate(waypoint.lat) && hasCoordinate(waypoint.lng)
+}
+
 function formatCoordinateLabel(latitude: number, longitude: number) {
   return `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`
 }
@@ -706,7 +710,9 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
   const publicWaypoints = useMemo(
     () =>
       (stream?.waypoints ?? [])
-        .filter((waypoint): waypoint is Waypoint => Boolean(waypoint) && waypoint.private !== true)
+        .filter((waypoint): waypoint is Waypoint => Boolean(waypoint))
+        .filter((waypoint) => waypoint.private !== true)
+        .filter((waypoint) => hasValidWaypointCoordinate(waypoint))
         .sort((left, right) => new Date(left.timestamp).getTime() - new Date(right.timestamp).getTime()),
     [stream],
   )
@@ -715,12 +721,13 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
     () =>
       getAllWaypoints()
         .filter((waypoint) => waypoint.streamId === streamId)
+        .filter((waypoint) => hasValidWaypointCoordinate(waypoint))
         .sort((left, right) => new Date(left.timestamp).getTime() - new Date(right.timestamp).getTime()),
     [localWaypointRefreshTick, streamId],
   )
 
   const mapWaypoints = useMemo(() => {
-    const byKey = new Map<string, { streamId: string; lat: number; lng: number; timestamp: string; pointIndex?: number | null }>()
+    const byKey = new Map<string, { streamId: string; lat: number; lng: number; timestamp: string | number; pointIndex?: number | null }>()
 
     publicWaypoints.forEach((waypoint) => {
       byKey.set(`${waypoint.streamId}:${waypoint.timestamp}`, waypoint)
@@ -810,9 +817,6 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
 
   return (
     <Screen preset="scroll" contentContainerStyle={themed($screenContainer)}>
-      <View style={themed($topActionsRow)}>
-        <Button text="Back to map" preset="default" onPress={handleBackToMapPress} />
-      </View>
 
       {loading ? (
         <View style={themed($stateBlock)}>
@@ -948,13 +952,6 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
                 style={themed($subtleText)}
               />
             </View>
-
-            <Button
-              text="Center on my location"
-              preset="default"
-              onPress={() => void handleCenterOnCurrentLocation()}
-              style={themed($mapActionButton)}
-            />
 
             {hasMapData ? (
               <View style={themed($mapCard)}>

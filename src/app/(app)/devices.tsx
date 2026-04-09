@@ -231,15 +231,6 @@ export const DevicesScreen: FC = function DevicesScreen() {
   return (
     <Screen preset="fixed" safeAreaEdges={["top"]} contentContainerStyle={themed($container)}>
       <View style={themed($header)}>
-        <View style={themed($headerRow)}>
-          <Text preset="heading" text="Devices" />
-          <Button
-            text="Back to settings"
-            preset="default"
-            onPress={handleBackToMap}
-            style={themed($backButton)}
-          />
-        </View>
       </View>
 
       <Button

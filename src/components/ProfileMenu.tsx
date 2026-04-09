@@ -81,15 +81,6 @@ export const ProfileMenu: React.FC<{
       label: "Settings",
       onPress: () => navigateTo("/(app)/settings" as AppRoutes),
     },
-    {
-      label: translate("profileMenu:myProfile"),
-      onPress: handleProfile,
-    },
-    {
-      label: translate("profileMenu:logOut"),
-      onPress: handleSignOut,
-      isDanger: true,
-    },
   ]
 
   return (

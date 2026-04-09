@@ -126,15 +126,4 @@ describe("UserProfileScreen", () => {
 
     expect(mockPush).toHaveBeenCalledWith("/(app)/user/johndoe/stream/stream-1")
   })
-
-  it("navigates back to the map", () => {
-    useAuth.mockReturnValue({ appUser: null })
-    fetchUserProfileByUsername.mockImplementation(() => new Promise(() => {}))
-
-    const { getByText } = render(<UserProfileScreen username="johndoe" />)
-
-    fireEvent.press(getByText("Back to map"))
-
-    expect(mockReplace).toHaveBeenCalledWith("/(app)")
-  })
 })

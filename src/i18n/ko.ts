@@ -49,13 +49,6 @@ const ko: Translations = {
     retry: "Retry",
     locationError: "Could not get your location. Please try again.",
   },
-  profileMenu: {
-    routes: "경로",
-    devices: "장치",
-    streams: "스트림",
-    myProfile: "내 프로필",
-    logOut: "로그아웃",
-  },
   userProfileScreen: {
     title: "프로필",
     bio: "소개",

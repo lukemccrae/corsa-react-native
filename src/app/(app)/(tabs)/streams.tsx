@@ -138,12 +138,6 @@ export const StreamsScreen: FC = function StreamsScreen() {
       safeAreaEdges={["top"]}
       contentContainerStyle={themed($container)}
     >
-      <View style={themed($header)}>
-        <View style={themed($headerRow)}>
-          <Text preset="heading" text="Streams" />
-          <Button text="Back to settings" preset="default" onPress={() => router.replace("/(app)/settings")} />
-        </View>
-      </View>
 
       <Button
         text="Create New Stream"

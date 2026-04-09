@@ -247,12 +247,6 @@ export const UserProfileScreen: FC<UserProfileScreenProps> = function UserProfil
                 style={themed($backButton)}
               />
             ) : null}
-            <Button
-              text="Back to map"
-              preset="default"
-              onPress={() => router.replace("/(app)")}
-              style={themed($backButton)}
-            />
           </View>
         </View>
 

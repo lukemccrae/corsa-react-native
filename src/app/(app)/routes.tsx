@@ -186,17 +186,6 @@ export const RoutesScreen: FC = function RoutesScreen() {
 
   return (
     <Screen preset="fixed" safeAreaEdges={["top"]} contentContainerStyle={themed($container)}>
-      <View style={themed($header)}>
-        <View style={themed($headerRow)}>
-          <Text preset="heading" text="Routes" />
-          <Button
-            text="Back to settings"
-            preset="default"
-            onPress={handleBackToMap}
-            style={themed($backButton)}
-          />
-        </View>
-      </View>
 
       <Button
         text="Upload Route"

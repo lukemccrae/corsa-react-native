@@ -23,10 +23,6 @@ export const SettingsScreen: FC = function SettingsScreen() {
         <Button text="Routes" preset="filled" onPress={() => router.push("/(app)/routes")} />
         <Button text="Devices" preset="filled" onPress={() => router.push("/(app)/devices")} />
       </View>
-
-      <View style={themed($footer)}>
-        <Button text="Back to map" preset="default" onPress={() => router.replace("/(app)")} />
-      </View>
     </Screen>
   )
 }
@@ -44,8 +40,4 @@ const $header: ThemedStyle<ViewStyle> = ({ spacing }) => ({
 
 const $actions: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   gap: spacing.sm,
-})
-
-const $footer: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  marginTop: spacing.lg,
 })

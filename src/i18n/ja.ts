@@ -50,13 +50,6 @@ const ja: Translations = {
     retry: "Retry",
     locationError: "Could not get your location. Please try again.",
   },
-  profileMenu: {
-    routes: "ルート",
-    devices: "デバイス",
-    streams: "ストリーム",
-    myProfile: "マイプロフィール",
-    logOut: "ログアウト",
-  },
   userProfileScreen: {
     title: "プロフィール",
     bio: "自己紹介",

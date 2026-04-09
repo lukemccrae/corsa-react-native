@@ -21,11 +21,8 @@ import {
   MapLibreMapRef,
   type SocialMapMarker,
 } from "@/components/Map/MapLibreMap"
-import { ProfileMenu } from "@/components/ProfileMenu"
 import { Text } from "@/components/Text"
 import type { LiveStream } from "@/generated/schema"
-import { translate } from "@/i18n/translate"
-import { useAuth } from "@/providers/AuthProvider"
 import { fetchPublicStreamsByEntity } from "@/services/api/graphql"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
@@ -72,7 +69,6 @@ function getStatusLabel(stream: LiveStream) {
 
 export const MapScreen: FC = function MapScreen() {
   const { themed } = useAppTheme()
-  const { user, appUser, signOut } = useAuth()
   const router = useRouter()
   const mapRef = useRef<MapLibreMapRef>(null)
 
@@ -144,11 +140,6 @@ export const MapScreen: FC = function MapScreen() {
     [socialStreams],
   )
 
-  const profileBadgeStyle = useMemo(
-    () => themed(sidebarCollapsed ? $profileBadgeCollapsed : $profileBadgeSidebarOpen),
-    [sidebarCollapsed, themed],
-  )
-
   useEffect(() => {
     if (!streamMarkers.length) return
 
@@ -166,8 +157,6 @@ export const MapScreen: FC = function MapScreen() {
     }
   }, [])
 
-  const displayUsername = appUser?.username
-  const profilePictureUri = appUser?.profilePicture
   const handleOpenStream = useCallback(
     (stream: LiveStream) => {
       const username = stream.publicUser?.username
@@ -286,23 +275,6 @@ export const MapScreen: FC = function MapScreen() {
         </Pressable>
       )}
 
-      {user && appUser ? (
-        <ProfileMenu
-          profilePictureUri={profilePictureUri}
-          username={displayUsername}
-          containerStyle={profileBadgeStyle}
-        />
-      ) : (
-        <Pressable
-          style={[themed($profileBadge), profileBadgeStyle]}
-          onPress={() => router.push("/(auth)/sign-in")}
-          accessibilityRole="button"
-          accessibilityLabel={translate("mapScreen:signIn")}
-        >
-          <Text tx="mapScreen:signIn" size="xs" weight="medium" style={themed($profileName)} />
-        </Pressable>
-      )}
-
       <View style={themed($zoomControls)}>
         <Pressable
           accessibilityRole="button"
@@ -400,50 +372,6 @@ const $zoomButtonText: ThemedStyle<TextStyle> = ({ colors }) => ({
   color: colors.text,
   fontSize: 22,
   lineHeight: 24,
-})
-
-const $profileBadge: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
-  position: "absolute",
-  right: spacing.md,
-  flexDirection: "row",
-  alignItems: "center",
-  gap: spacing.xs,
-  maxWidth: 220,
-  backgroundColor: colors.background,
-  borderRadius: 999,
-  paddingVertical: spacing.xs,
-  paddingHorizontal: spacing.sm,
-  shadowColor: colors.palette.neutral900,
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.15,
-  shadowRadius: 8,
-  elevation: 4,
-})
-
-const $profileBadgeCollapsed: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  top: spacing.xxxl,
-})
-
-const $profileBadgeSidebarOpen: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  top: spacing.xxxl + spacing.xxl,
-})
-
-const $avatar: ThemedStyle<ImageStyle> = () => ({
-  width: 28,
-  height: 28,
-  borderRadius: 14,
-})
-
-const $avatarFallback: ThemedStyle<ViewStyle> = ({ colors }) => ({
-  width: 28,
-  height: 28,
-  borderRadius: 14,
-  backgroundColor: colors.palette.neutral300,
-})
-
-const $profileName: ThemedStyle<TextStyle> = ({ colors }) => ({
-  color: colors.text,
-  flexShrink: 1,
 })
 
 const $mapButton: ThemedStyle<ViewStyle> = () => ({
