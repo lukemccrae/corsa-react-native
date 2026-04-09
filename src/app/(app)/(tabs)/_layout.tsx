@@ -1,18 +1,22 @@
 import { Tabs } from "expo-router"
 import { Ionicons } from "@expo/vector-icons"
 
-import { colors } from "@/theme/colors"
+import { useAppTheme } from "@/theme/context"
 
 export default function AppTabsLayout() {
+  const {
+    theme: { colors, isDark },
+  } = useAppTheme()
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.tint,
-        tabBarInactiveTintColor: colors.tintInactive,
+        tabBarInactiveTintColor: isDark ? colors.palette.neutral600 : colors.tintInactive,
         tabBarStyle: {
-          backgroundColor: colors.palette.neutral100,
-          borderTopColor: colors.border,
+          backgroundColor: isDark ? colors.palette.neutral200 : colors.palette.neutral100,
+          borderTopColor: isDark ? colors.palette.neutral300 : colors.border,
         },
       }}
     >
@@ -43,6 +47,8 @@ export default function AppTabsLayout() {
           ),
         }}
       />
+      <Tabs.Screen name="routes" options={{ href: null }} />
+      <Tabs.Screen name="devices" options={{ href: null }} />
       <Tabs.Screen name="settings" options={{ href: null }} />
       <Tabs.Screen name="user" options={{ href: null }} />
       <Tabs.Screen name="user/[username]" options={{ href: null }} />

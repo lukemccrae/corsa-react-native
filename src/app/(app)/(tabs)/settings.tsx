@@ -20,8 +20,8 @@ export const SettingsScreen: FC = function SettingsScreen() {
 
       <View style={themed($actions)}>
         <Button text="Streams" preset="filled" onPress={() => router.push("/(app)/streams")} />
-        <Button text="Routes" preset="filled" onPress={() => router.push("/(app)/routes")} />
-        <Button text="Devices" preset="filled" onPress={() => router.push("/(app)/devices")} />
+        <Button text="Routes" preset="filled" onPress={() => router.push("/(app)/(tabs)/routes")} />
+        <Button text="Devices" preset="filled" onPress={() => router.push("/(app)/(tabs)/devices")} />
       </View>
     </Screen>
   )

@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react-native"
+import { fireEvent, render } from "@testing-library/react-native"
 
 import { MapLibreMap } from "./MapLibreMap"
 
@@ -8,7 +8,6 @@ const mockMapView = jest.fn(({ children }: { children?: React.ReactNode }) => ch
 const mockMarkerView = jest.fn(({ children }: { children?: React.ReactNode }) => children ?? null)
 const mockShapeSource = jest.fn(({ children }: { children?: React.ReactNode }) => children ?? null)
 const mockLineLayer = jest.fn((_props: object) => null)
-const mockCircleLayer = jest.fn((_props: object) => null)
 
 jest.mock("@maplibre/maplibre-react-native", () => ({
   __esModule: true,
@@ -19,7 +18,6 @@ jest.mock("@maplibre/maplibre-react-native", () => ({
     MarkerView: (props: object) => mockMarkerView(props),
     ShapeSource: (props: object) => mockShapeSource(props),
     LineLayer: (props: object) => mockLineLayer(props),
-    CircleLayer: (props: object) => mockCircleLayer(props),
     setAccessToken: jest.fn(),
   },
 }))
@@ -57,9 +55,55 @@ describe("MapLibreMap", () => {
       />,
     )
 
-    expect(mockShapeSource).toHaveBeenCalledTimes(2)
+    expect(mockShapeSource).toHaveBeenCalledTimes(1)
     expect(mockLineLayer).toHaveBeenCalledTimes(1)
-    expect(mockCircleLayer).toHaveBeenCalledTimes(1)
-    expect(mockMarkerView).toHaveBeenCalledTimes(2)
+    expect(mockMarkerView).toHaveBeenCalledTimes(4)
+  })
+
+  it("calls onWaypointMarkerPress when a waypoint marker is tapped", () => {
+    const onWaypointMarkerPress = jest.fn()
+
+    const { getAllByLabelText } = render(
+      <MapLibreMap
+        waypointMarkers={[
+          {
+            id: "wp-1",
+            latitude: 45.5,
+            longitude: -122.6,
+            recordedAt: "Apr 9, 2026 10:10 AM",
+            locationLabel: "45.5000, -122.6000",
+            source: "local",
+          },
+        ]}
+        onWaypointMarkerPress={onWaypointMarkerPress}
+      />,
+    )
+
+    fireEvent.press(getAllByLabelText("Open waypoint details")[0])
+
+    expect(onWaypointMarkerPress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "wp-1",
+        latitude: 45.5,
+        longitude: -122.6,
+      }),
+    )
+  })
+
+  it("renders pending style for unsynced waypoint markers", () => {
+    const { getByLabelText } = render(
+      <MapLibreMap
+        waypointMarkers={[
+          {
+            id: "wp-pending",
+            latitude: 45.5,
+            longitude: -122.6,
+            synced: false,
+          },
+        ]}
+      />,
+    )
+
+    expect(getByLabelText("Open waypoint details")).toBeTruthy()
   })
 })

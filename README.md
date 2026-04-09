@@ -36,6 +36,9 @@ EXPO_PUBLIC_GEOJSON_CDN_BASE_URL=https://your-geojson-cloudfront-distribution.cl
 # AppSync (runtime GraphQL fetches from the mobile app)
 EXPO_PUBLIC_APPSYNC_API_KEY=your_appsync_api_key
 EXPO_PUBLIC_APPSYNC_ENDPOINT=https://<your-api-id>.appsync-api.<region>.amazonaws.com/graphql
+
+# Native waypoint ingestion REST endpoint
+EXPO_PUBLIC_NATIVE_WAYPOINT_ENDPOINT=https://your-api.example.com/native-waypoint
 ```
 
 These are read at build time via `app.config.ts` and exposed through `expo-constants`. You can find the Firebase values in your [Firebase console](https://console.firebase.google.com/) under **Project Settings → Your apps → SDK setup and configuration**.

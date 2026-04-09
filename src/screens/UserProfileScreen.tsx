@@ -74,77 +74,79 @@ function StreamCard({
   username: string
   onPress: () => void
 }) {
+  const { themed } = useAppTheme()
   const status = getStreamStatus(stream)
   const formattedDate = formatDate(stream.startTime)
 
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [pressed && $pressedCard]}>
-      <View style={$card}>
-        <View style={$cardHeaderRow}>
-          <Text text={stream.title} weight="medium" numberOfLines={1} style={$cardTitle} />
+    <Pressable onPress={onPress} style={({ pressed }) => [themed($card), pressed ? themed($pressedCard) : null]}>
+      <View>
+        <View style={themed($cardHeaderRow)}>
+          <Text text={stream.title} weight="medium" numberOfLines={1} style={themed($cardTitle)} />
           <View
             style={[
-              $statusPill,
+              themed($statusPill),
               status === "live"
-                ? $livePill
+                ? themed($livePill)
                 : status === "upcoming"
-                  ? $upcomingPill
-                  : $finishedPill,
+                  ? themed($upcomingPill)
+                  : themed($finishedPill),
             ]}
           >
             <Text
               text={status === "live" ? "LIVE" : status === "upcoming" ? "UPCOMING" : "FINISHED"}
               size="xxs"
               weight="medium"
-              style={$statusPillText}
+              style={themed($statusPillText)}
             />
           </View>
         </View>
 
-        <View style={$metaRow}>
-          {formattedDate ? <Text text={formattedDate} size="xs" style={$metaText} /> : null}
+        <View style={themed($metaRow)}>
+          {formattedDate ? <Text text={formattedDate} size="xs" style={themed($metaText)} /> : null}
           {stream.mileMarker != null ? (
             <Text
               text={formatDistance(stream.mileMarker, stream.unitOfMeasure)}
               size="xs"
-              style={$metaText}
+              style={themed($metaText)}
             />
           ) : null}
         </View>
 
-        <Text text={`Open ${username}'s livestream`} size="xs" style={$actionText} />
+        <Text text={`Open ${username}'s livestream`} size="xs" style={themed($actionText)} />
       </View>
     </Pressable>
   )
 }
 
 function RouteCard({ route, onPress }: { route: Route; onPress: () => void }) {
+  const { themed } = useAppTheme()
   const statusTone = getRouteStatusTone(route.processingStatus)
 
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [pressed && $pressedCard]}>
-      <View style={$card}>
-        <View style={$cardHeaderRow}>
-          <Text text={route.name} weight="medium" numberOfLines={1} style={$cardTitle} />
+    <Pressable onPress={onPress} style={({ pressed }) => [themed($card), pressed ? themed($pressedCard) : null]}>
+      <View>
+        <View style={themed($cardHeaderRow)}>
+          <Text text={route.name} weight="medium" numberOfLines={1} style={themed($cardTitle)} />
           {route.processingStatus !== "COMPLETED" ? (
             <View
               style={[
-                $statusPill,
+                themed($statusPill),
                 statusTone === "danger"
-                  ? $dangerPill
+                  ? themed($dangerPill)
                   : statusTone === "warning"
-                    ? $warningPill
-                    : $mutedPill,
+                    ? themed($warningPill)
+                    : themed($mutedPill),
               ]}
             >
-              <Text text={route.processingStatus} size="xxs" weight="medium" style={$statusPillText} />
+              <Text text={route.processingStatus} size="xxs" weight="medium" style={themed($statusPillText)} />
             </View>
           ) : null}
         </View>
 
-        <View style={$metaRow}>
-          <Text text={formatDistance(route.distanceInMiles, route.uom)} size="xs" style={$metaText} />
-          <Text text={formatGain(route.gainInFeet, route.uom)} size="xs" style={$metaText} />
+        <View style={themed($metaRow)}>
+          <Text text={formatDistance(route.distanceInMiles, route.uom)} size="xs" style={themed($metaText)} />
+          <Text text={formatGain(route.gainInFeet, route.uom)} size="xs" style={themed($metaText)} />
         </View>
       </View>
     </Pressable>
@@ -356,60 +358,61 @@ export const UserProfileScreen: FC<UserProfileScreenProps> = function UserProfil
   )
 }
 
-const $card: ViewStyle = {
+const $card: ThemedStyle<ViewStyle> = ({ colors }) => ({
   borderWidth: 1,
-  borderColor: "#D4D7DD",
+  borderColor: colors.border,
   borderRadius: 16,
   padding: 16,
   gap: 12,
-  backgroundColor: "#FFFFFF",
-}
+  backgroundColor: colors.background,
+})
 
-const $pressedCard: ViewStyle = {
+const $pressedCard: ThemedStyle<ViewStyle> = () => ({
   opacity: 0.84,
-}
+})
 
-const $cardHeaderRow: ViewStyle = {
+const $cardHeaderRow: ThemedStyle<ViewStyle> = () => ({
   flexDirection: "row",
   alignItems: "center",
   justifyContent: "space-between",
   gap: 12,
-}
+})
 
-const $cardTitle: TextStyle = {
+const $cardTitle: ThemedStyle<TextStyle> = ({ colors }) => ({
   flex: 1,
-}
+  color: colors.text,
+})
 
-const $metaRow: ViewStyle = {
+const $metaRow: ThemedStyle<ViewStyle> = () => ({
   flexDirection: "row",
   flexWrap: "wrap",
   gap: 12,
-}
+})
 
-const $metaText: TextStyle = {
-  color: "#5B6472",
-}
+const $metaText: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.textDim,
+})
 
-const $actionText: TextStyle = {
-  color: "#3D6C8C",
-}
+const $actionText: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.tint,
+})
 
-const $statusPill: ViewStyle = {
+const $statusPill: ThemedStyle<ViewStyle> = () => ({
   borderRadius: 999,
   paddingHorizontal: 10,
   paddingVertical: 4,
-}
+})
 
-const $statusPillText: TextStyle = {
-  color: "#FFFFFF",
-}
+const $statusPillText: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.palette.neutral100,
+})
 
-const $livePill: ViewStyle = { backgroundColor: "#C43D3D" }
-const $upcomingPill: ViewStyle = { backgroundColor: "#3D6C8C" }
-const $finishedPill: ViewStyle = { backgroundColor: "#7A818C" }
-const $warningPill: ViewStyle = { backgroundColor: "#A26720" }
-const $dangerPill: ViewStyle = { backgroundColor: "#B54848" }
-const $mutedPill: ViewStyle = { backgroundColor: "#7A818C" }
+const $livePill: ThemedStyle<ViewStyle> = () => ({ backgroundColor: "#C43D3D" })
+const $upcomingPill: ThemedStyle<ViewStyle> = ({ colors }) => ({ backgroundColor: colors.tint })
+const $finishedPill: ThemedStyle<ViewStyle> = ({ colors }) => ({ backgroundColor: colors.palette.neutral500 })
+const $warningPill: ThemedStyle<ViewStyle> = () => ({ backgroundColor: "#A26720" })
+const $dangerPill: ThemedStyle<ViewStyle> = () => ({ backgroundColor: "#B54848" })
+const $mutedPill: ThemedStyle<ViewStyle> = ({ colors }) => ({ backgroundColor: colors.palette.neutral500 })
 
 const $container: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   paddingBottom: spacing.xxl,

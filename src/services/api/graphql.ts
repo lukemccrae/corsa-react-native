@@ -82,6 +82,8 @@ const cloudFrontPhotoUrl = process.env.EXPO_PUBLIC_CLOUDFRONT_PHOTO_URL ?? ""
 const geoJsonCdnBaseUrl =
   process.env.EXPO_PUBLIC_GEOJSON_CDN_BASE_URL ?? "https://d2mg2mxj6r88wt.cloudfront.net"
 
+const nativeWaypointEndpoint = resolveNativeWaypointEndpoint()
+
 const GET_USER_BY_USER_ID = `
   query GetUserByUserId($userId: ID!) {
     getUserByUserId(userId: $userId) {
@@ -379,6 +381,38 @@ function resolveGeoJsonUrl(path: string | null | undefined): string {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`
 
   return `${normalizedBaseUrl}${normalizedPath}`
+}
+
+function resolveNativeWaypointEndpoint(): string {
+  const explicitEndpoint =
+    process.env.EXPO_PUBLIC_NATIVE_WAYPOINT_ENDPOINT ?? process.env.NATIVE_WAYPOINT_ENDPOINT ?? ""
+
+  if (explicitEndpoint) {
+    return explicitEndpoint
+  }
+
+  const backendBaseUrl = process.env.EXPO_PUBLIC_BACKEND_BASE_URL ?? process.env.BACKEND_BASE_URL ?? ""
+  if (backendBaseUrl) {
+    return `${backendBaseUrl.replace(/\/+$/, "")}/native-waypoint`
+  }
+
+  if (appSyncEndpoint) {
+    const appSyncBase = appSyncEndpoint.replace(/\/graphql\/?$/, "")
+    return `${appSyncBase}/native-waypoint`
+  }
+
+  return ""
+}
+
+function buildNativeWaypointUrl(): string {
+  if (!nativeWaypointEndpoint) return ""
+
+  const trimmed = nativeWaypointEndpoint.replace(/\/+$/, "")
+  if (trimmed.endsWith("/native-waypoint")) {
+    return trimmed
+  }
+
+  return `${trimmed}/native-waypoint`
 }
 
 function normalizeUserImagePaths(user: User): User {
@@ -840,4 +874,147 @@ export async function deleteRoute(
   )
 
   return result.deleteRoute?.success === true
+}
+
+export type RestWaypointIngestInput = {
+  streamId: string
+  lat: number
+  lng: number
+  timestamp?: string
+}
+
+export type RestWaypointIngestResponse = {
+  ok: boolean
+  streamId: string
+  timestamp: string
+  snapped: boolean
+  pointIndex?: number | null
+  mileMarker?: number | null
+  cumulativeVert?: number | null
+}
+
+function normalizeRestWaypointTimestamp(timestamp: string | number | null | undefined): string | undefined {
+  if (timestamp == null) return undefined
+
+  if (typeof timestamp === "number") {
+    const parsedDate = new Date(timestamp)
+    if (Number.isNaN(parsedDate.getTime())) {
+      throw new Error(`Invalid waypoint timestamp: ${timestamp}`)
+    }
+    return parsedDate.toISOString()
+  }
+
+  const trimmed = timestamp.trim()
+  if (!trimmed) return undefined
+
+  const numeric = Number(trimmed)
+  if (!Number.isNaN(numeric)) {
+    const parsedDate = new Date(numeric)
+    if (!Number.isNaN(parsedDate.getTime())) {
+      return parsedDate.toISOString()
+    }
+  }
+
+  const parsedDate = new Date(trimmed)
+  if (Number.isNaN(parsedDate.getTime())) {
+    throw new Error(`Invalid waypoint timestamp: ${timestamp}`)
+  }
+
+  return parsedDate.toISOString()
+}
+
+export async function ingestNativeWaypoint(
+  input: RestWaypointIngestInput,
+  idToken: string,
+): Promise<RestWaypointIngestResponse> {
+  const requestUrl = buildNativeWaypointUrl()
+
+  if (!requestUrl) {
+    throw new Error(
+      "Missing native waypoint endpoint. Set EXPO_PUBLIC_NATIVE_WAYPOINT_ENDPOINT or EXPO_PUBLIC_BACKEND_BASE_URL.",
+    )
+  }
+
+  async function doRequest(authorizationHeader: string): Promise<Response> {
+    return fetch(requestUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: authorizationHeader,
+      },
+      body: JSON.stringify(input),
+    })
+  }
+
+  let response = await doRequest(`Bearer ${idToken}`)
+
+  if (response.status === 401 || response.status === 403) {
+    // Some API Gateway authorizers expect the raw JWT token without the Bearer prefix.
+    response = await doRequest(idToken)
+  }
+
+  let parsed: RestWaypointIngestResponse | null = null
+  try {
+    parsed = (await response.json()) as RestWaypointIngestResponse
+  } catch {
+    parsed = null
+  }
+
+  if (!response.ok) {
+    const errorBody = parsed ? JSON.stringify(parsed) : ""
+    const trimmedBody = errorBody.length > 200 ? `${errorBody.slice(0, 200)}...` : errorBody
+    throw new Error(
+      `native-waypoint request failed (${response.status}) at ${requestUrl}${trimmedBody ? `: ${trimmedBody}` : ""}`,
+    )
+  }
+
+  if (!parsed) {
+    throw new Error("native-waypoint returned an empty response")
+  }
+
+  if (parsed.ok !== true) {
+    throw new Error("native-waypoint returned ok=false")
+  }
+
+  return parsed
+}
+
+export type NativeWaypointUploadInput = {
+  streamId: string
+  lat: number
+  lng: number
+  timestamp?: string | number | null
+}
+
+export async function ingestNativeWaypoints(
+  inputs: NativeWaypointUploadInput[],
+  idToken: string,
+): Promise<{ uploaded: number; failed: number; errors: string[] }> {
+  if (inputs.length === 0) {
+    return { uploaded: 0, failed: 0, errors: [] }
+  }
+
+  const settled = await Promise.allSettled(
+    inputs.map((input) =>
+      ingestNativeWaypoint(
+        {
+          streamId: input.streamId,
+          lat: input.lat,
+          lng: input.lng,
+          timestamp: normalizeRestWaypointTimestamp(input.timestamp),
+        },
+        idToken,
+      ),
+    ),
+  )
+
+  const errors = settled
+    .filter((result): result is PromiseRejectedResult => result.status === "rejected")
+    .map((result) => (result.reason instanceof Error ? result.reason.message : "Could not upload waypoint."))
+
+  return {
+    uploaded: settled.length - errors.length,
+    failed: errors.length,
+    errors,
+  }
 }

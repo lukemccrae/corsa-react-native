@@ -32,6 +32,7 @@ import type { ChatMessage, LiveStream, Post, User, Waypoint } from "@/generated/
 import {
   fetchUserStreamById,
   fetchUserStreamChatMessagesPage,
+  ingestNativeWaypoints,
   publishChatMessage,
 } from "@/services/api/graphql"
 import { useAppTheme } from "@/theme/context"
@@ -57,7 +58,7 @@ interface UserStreamScreenProps {
   streamId: string
 }
 
-function formatDateTime(value: string | null | undefined) {
+function formatDateTime(value: string | number | null | undefined) {
   if (!value) return null
 
   const parsedDate = new Date(value)
@@ -485,7 +486,7 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
   streamId,
 }) {
   const { themed } = useAppTheme()
-  const { appUser } = useAuth()
+  const { user, appUser } = useAuth()
   const router = useRouter()
   const streamMapRef = useRef<MapLibreMapRef>(null)
   const [routeUser, setRouteUser] = useState<User | null>(null)
@@ -496,9 +497,12 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
   const [activeTrackingStreamId, setActiveTrackingStreamId] = useState<string | null>(null)
   const [trackingBusy, setTrackingBusy] = useState(false)
   const [trackingError, setTrackingError] = useState<string | null>(null)
+  const [uploadBusy, setUploadBusy] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
   const [localWaypointRefreshTick, setLocalWaypointRefreshTick] = useState(0)
   const [selectedPostImageUrl, setSelectedPostImageUrl] = useState<string | null>(null)
   const [selectedMapPostMarker, setSelectedMapPostMarker] = useState<StreamPostMarker | null>(null)
+  const [selectedMapWaypointMarker, setSelectedMapWaypointMarker] = useState<StreamWaypointMarker | null>(null)
   const [selectedMapPostImageAspectRatio, setSelectedMapPostImageAspectRatio] = useState(
     DEFAULT_MAP_POST_IMAGE_ASPECT_RATIO,
   )
@@ -717,6 +721,11 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
     [stream],
   )
 
+  const publicWaypointKeys = useMemo(
+    () => new Set(publicWaypoints.map((waypoint) => `${waypoint.streamId}:${waypoint.timestamp}`)),
+    [publicWaypoints],
+  )
+
   const localWaypoints = useMemo(
     () =>
       getAllWaypoints()
@@ -726,15 +735,59 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
     [localWaypointRefreshTick, streamId],
   )
 
+  const pendingLocalWaypoints = useMemo(
+    () => localWaypoints.filter((waypoint) => !publicWaypointKeys.has(`${waypoint.streamId}:${waypoint.timestamp}`)),
+    [localWaypoints, publicWaypointKeys],
+  )
+
   const mapWaypoints = useMemo(() => {
-    const byKey = new Map<string, { streamId: string; lat: number; lng: number; timestamp: string | number; pointIndex?: number | null }>()
+    const publicWaypointKeys = new Set(publicWaypoints.map((waypoint) => `${waypoint.streamId}:${waypoint.timestamp}`))
+
+    const byKey = new Map<
+      string,
+      {
+        streamId: string
+        lat: number
+        lng: number
+        timestamp: string | number
+        pointIndex?: number | null
+        altitude?: number | null
+        mileMarker?: number | null
+        cumulativeVert?: number | null
+        source: "public" | "local"
+        synced: boolean
+      }
+    >()
 
     publicWaypoints.forEach((waypoint) => {
-      byKey.set(`${waypoint.streamId}:${waypoint.timestamp}`, waypoint)
+      byKey.set(`${waypoint.streamId}:${waypoint.timestamp}`, {
+        streamId: waypoint.streamId,
+        lat: waypoint.lat,
+        lng: waypoint.lng,
+        timestamp: waypoint.timestamp,
+        pointIndex: waypoint.pointIndex,
+        altitude: waypoint.altitude,
+        mileMarker: waypoint.mileMarker,
+        cumulativeVert: waypoint.cumulativeVert,
+        source: "public",
+        synced: true,
+      })
     })
 
     localWaypoints.forEach((waypoint) => {
-      byKey.set(`${waypoint.streamId}:${waypoint.timestamp}`, waypoint)
+      const key = `${waypoint.streamId}:${waypoint.timestamp}`
+      byKey.set(`${waypoint.streamId}:${waypoint.timestamp}`, {
+        streamId: waypoint.streamId,
+        lat: waypoint.lat,
+        lng: waypoint.lng,
+        timestamp: waypoint.timestamp,
+        pointIndex: waypoint.pointIndex,
+        altitude: waypoint.altitude,
+        mileMarker: waypoint.mileMarker,
+        cumulativeVert: waypoint.cumulativeVert,
+        source: "local",
+        synced: publicWaypointKeys.has(key),
+      })
     })
 
     return [...byKey.values()].sort(
@@ -765,8 +818,26 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
         id: `${waypoint.streamId}-${waypoint.pointIndex ?? index}`,
         latitude: waypoint.lat,
         longitude: waypoint.lng,
+        recordedAt: formatDateTime(waypoint.timestamp) ?? String(waypoint.timestamp),
+        locationLabel: formatCoordinateLabel(waypoint.lat, waypoint.lng),
+        source: waypoint.source,
+        synced: waypoint.synced,
+        altitude: waypoint.altitude ?? null,
+        mileMarker: waypoint.mileMarker ?? null,
+        cumulativeVert: waypoint.cumulativeVert ?? null,
+        pointIndex: waypoint.pointIndex ?? null,
       })),
     [mapWaypoints],
+  )
+
+  const pendingWaypointCount = useMemo(
+    () => pendingLocalWaypoints.length,
+    [pendingLocalWaypoints],
+  )
+
+  const syncedWaypointCount = useMemo(
+    () => waypointMarkers.filter((waypoint) => waypoint.synced !== false).length,
+    [waypointMarkers],
   )
 
   const postMarkers = useMemo<StreamPostMarker[]>(
@@ -808,6 +879,57 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
   const initialCenter = useMemo(() => getInitialCenter(mapPoints), [mapPoints])
   const initialZoomLevel = useMemo(() => getInitialZoomLevel(mapPoints), [mapPoints])
   const hasMapData = mapPoints.length > 0
+
+  const handleUploadPendingWaypoints = useCallback(async () => {
+    if (!isOwnStream) return
+
+    if (!user) {
+      setUploadError("You must be signed in to upload waypoints.")
+      return
+    }
+
+    if (pendingLocalWaypoints.length === 0) {
+      Alert.alert("No pending points", "All local waypoints are already synced.")
+      return
+    }
+
+    setUploadBusy(true)
+    setUploadError(null)
+
+    try {
+      const idToken = await user.getIdToken()
+      const result = await ingestNativeWaypoints(
+        pendingLocalWaypoints.map((waypoint) => ({
+          streamId: waypoint.streamId,
+          lat: waypoint.lat,
+          lng: waypoint.lng,
+          timestamp: waypoint.timestamp,
+        })),
+        idToken,
+      )
+
+      const refreshed = await fetchUserStreamById(username, streamId)
+      setStream(refreshed?.stream ?? null)
+      setChatNextToken(refreshed?.chatNextToken ?? null)
+      setLocalWaypointRefreshTick((value) => value + 1)
+
+      if (result.failed > 0) {
+        setUploadError(result.errors[0] ?? `${result.failed} waypoint upload request(s) failed.`)
+      }
+
+      Alert.alert(
+        "Waypoint upload complete",
+        `${result.uploaded} uploaded${result.failed > 0 ? `, ${result.failed} failed` : ""}.`,
+      )
+    } catch (uploadingError) {
+      setUploadError(
+        uploadingError instanceof Error ? uploadingError.message : "Could not upload pending waypoints.",
+      )
+    } finally {
+      setUploadBusy(false)
+    }
+  }, [isOwnStream, pendingLocalWaypoints, streamId, user, username])
+
   const handleProfilePress = useCallback(() => {
     router.replace(`/(app)/user/${username}`)
   }, [router, username])
@@ -913,6 +1035,9 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
                 {trackingError ? (
                   <Text text={trackingError} size="xs" style={themed($errorText)} />
                 ) : null}
+                {uploadError ? (
+                  <Text text={uploadError} size="xs" style={themed($errorText)} />
+                ) : null}
                 <View style={themed($trackingButtons)}>
                   <Button
                     text={
@@ -933,6 +1058,13 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
                     style={themed($trackingButton)}
                   />
                   <Button
+                    text={uploadBusy ? "Uploading pending points..." : `Upload pending (${pendingWaypointCount})`}
+                    preset="default"
+                    onPress={() => void handleUploadPendingWaypoints()}
+                    disabled={uploadBusy || pendingWaypointCount === 0}
+                    style={themed($trackingButton)}
+                  />
+                  <Button
                     text="Log local points"
                     preset="default"
                     onPress={handleLogLocalWaypoints}
@@ -947,7 +1079,7 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
             <View style={themed($sectionHeader)}>
               <Text text="Map activity" preset="subheading" size="sm" />
               <Text
-                text={`${mapWaypoints.length} points • ${postMarkers.length} posts`}
+                text={`${mapWaypoints.length} points • ${syncedWaypointCount} synced • ${pendingWaypointCount} pending • ${postMarkers.length} posts`}
                 size="xxs"
                 style={themed($subtleText)}
               />
@@ -962,8 +1094,13 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
                     initialZoomLevel={initialZoomLevel}
                     trackCoordinates={trackCoordinates}
                     waypointMarkers={waypointMarkers}
+                    onWaypointMarkerPress={(marker) => {
+                      setSelectedMapPostMarker(null)
+                      setSelectedMapWaypointMarker(marker)
+                    }}
                     postMarkers={postMarkers}
                     onPostMarkerPress={(marker) => {
+                      setSelectedMapWaypointMarker(null)
                       setSelectedMapPostMarker(marker)
                     }}
                     currentLocationMarker={currentLocationMarker}
@@ -1003,6 +1140,85 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
               </View>
             )}
           </View>
+
+          <Modal
+            visible={Boolean(selectedMapWaypointMarker)}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setSelectedMapWaypointMarker(null)}
+          >
+            <Pressable
+              style={themed($mapPostModalBackdrop)}
+              onPress={() => setSelectedMapWaypointMarker(null)}
+              accessibilityRole="button"
+              accessibilityLabel="Close waypoint details"
+            >
+              {selectedMapWaypointMarker ? (
+                <Pressable
+                  style={themed($mapPostModalCard)}
+                  onPress={(event) => event.stopPropagation()}
+                  accessibilityRole="summary"
+                  accessibilityLabel="Waypoint details"
+                >
+                  <Text text="Waypoint" size="xs" style={themed($mapPostModalBody)} />
+                  {selectedMapWaypointMarker.recordedAt ? (
+                    <Text
+                      text={`Recorded ${selectedMapWaypointMarker.recordedAt}`}
+                      size="xxs"
+                      style={themed($mapPostModalMeta)}
+                    />
+                  ) : null}
+                  {selectedMapWaypointMarker.locationLabel ? (
+                    <Text
+                      text={`Location ${selectedMapWaypointMarker.locationLabel}`}
+                      size="xxs"
+                      style={themed($mapPostModalMeta)}
+                    />
+                  ) : null}
+                  <Text
+                    text={`Source ${selectedMapWaypointMarker.source === "local" ? "This device" : "Stream data"}`}
+                    size="xxs"
+                    style={themed($mapPostModalMeta)}
+                  />
+                  {selectedMapWaypointMarker.synced === false ? (
+                    <Text
+                      text="Sync Pending upload"
+                      size="xxs"
+                      style={themed($mapPostModalMeta)}
+                    />
+                  ) : null}
+                  {selectedMapWaypointMarker.altitude != null ? (
+                    <Text
+                      text={`Altitude ${selectedMapWaypointMarker.altitude.toFixed(1)} m`}
+                      size="xxs"
+                      style={themed($mapPostModalMeta)}
+                    />
+                  ) : null}
+                  {selectedMapWaypointMarker.mileMarker != null ? (
+                    <Text
+                      text={`Distance ${formatDistance(selectedMapWaypointMarker.mileMarker, stream.unitOfMeasure)}`}
+                      size="xxs"
+                      style={themed($mapPostModalMeta)}
+                    />
+                  ) : null}
+                  {selectedMapWaypointMarker.cumulativeVert != null ? (
+                    <Text
+                      text={`Vert ${selectedMapWaypointMarker.cumulativeVert.toFixed(1)} m`}
+                      size="xxs"
+                      style={themed($mapPostModalMeta)}
+                    />
+                  ) : null}
+                  {selectedMapWaypointMarker.pointIndex != null ? (
+                    <Text
+                      text={`Point #${selectedMapWaypointMarker.pointIndex}`}
+                      size="xxs"
+                      style={themed($mapPostModalMeta)}
+                    />
+                  ) : null}
+                </Pressable>
+              ) : null}
+            </Pressable>
+          </Modal>
 
           <Modal
             visible={Boolean(selectedMapPostMarker)}

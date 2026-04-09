@@ -244,6 +244,7 @@ export type LiveStream = {
   title: Scalars['String']['output'];
   unitOfMeasure?: Maybe<UnitOfMeasure>;
   waypoints?: Maybe<Array<Maybe<Waypoint>>>;
+  waypointsPrivate?: Maybe<Scalars['Boolean']['output']>;
 };
 
 
@@ -753,4 +754,5 @@ export type WaypointInput = {
   private?: InputMaybe<Scalars['Boolean']['input']>;
   streamId: Scalars['ID']['input'];
   timestamp: Scalars['AWSDateTime']['input'];
+  waypointsPrivate?: InputMaybe<Scalars['Boolean']['input']>;
 };

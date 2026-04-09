@@ -61,7 +61,7 @@ function createEmptyForm(): DeviceFormState {
 }
 
 export const DevicesScreen: FC = function DevicesScreen() {
-  const { themed } = useAppTheme()
+  const { theme, themed } = useAppTheme()
   const router = useRouter()
   const { user, appUser } = useAuth()
   const [devices, setDevices] = useState<Device[]>([])
@@ -216,7 +216,7 @@ export const DevicesScreen: FC = function DevicesScreen() {
           if (errors[key]) setErrors((current) => ({ ...current, [key]: undefined }))
         }}
         editable={!saving}
-        placeholderTextColor="#999"
+        placeholderTextColor={theme.colors.textDim}
         autoCapitalize="none"
         keyboardType={keyboardType}
       />
@@ -365,7 +365,7 @@ const $modalHeader: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({
   paddingHorizontal: spacing.md,
   paddingVertical: spacing.md,
   borderBottomWidth: 1,
-  borderBottomColor: colors.palette?.neutral100,
+  borderBottomColor: colors.border,
 })
 
 const $closeButton: ThemedStyle<TextStyle> = ({ spacing }) => ({

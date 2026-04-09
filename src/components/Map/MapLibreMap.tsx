@@ -1,14 +1,37 @@
 import { forwardRef, useImperativeHandle, useMemo, useRef } from "react"
 import { Image, Pressable, StyleSheet, View } from "react-native"
 import MapLibreGL, { CameraRef, MapViewRef } from "@maplibre/maplibre-react-native"
-import type { Feature, FeatureCollection, LineString, Point } from "geojson"
+import type { FeatureCollection, LineString } from "geojson"
 
-// OpenStreetMap raster tile style — no API key required.
-// NOTE: The public OSM tile server (tile.openstreetmap.org) has a usage policy and is
-// intended for low-traffic development use only. For production, replace TILE_STYLE_URL
-// with a hosted style from a provider such as MapTiler (free tier), Stadia Maps, or a
-// self-hosted tile server. See https://wiki.openstreetmap.org/wiki/Tile_usage_policy
-export const TILE_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty"
+// OpenTopoMap raster tile style equivalent of:
+// <TileLayer
+//   attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+//   url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
+// />
+export const TILE_STYLE = {
+  version: 8,
+  name: "OpenTopoMap",
+  sources: {
+    opentopomap: {
+      type: "raster",
+      tiles: [
+        "https://a.tile.opentopomap.org/{z}/{x}/{y}.png",
+        "https://b.tile.opentopomap.org/{z}/{x}/{y}.png",
+        "https://c.tile.opentopomap.org/{z}/{x}/{y}.png",
+      ],
+      tileSize: 256,
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    },
+  },
+  layers: [
+    {
+      id: "opentopomap-layer",
+      type: "raster",
+      source: "opentopomap",
+    },
+  ],
+}
 
 // No Mapbox/MapTiler access token required when using MapLibre with OSM/OpenFreeMap tiles.
 MapLibreGL.setAccessToken(null)
@@ -33,6 +56,7 @@ interface MapLibreMapProps {
   onMarkerPress?: (marker: SocialMapMarker) => void
   trackCoordinates?: MapCoordinate[]
   waypointMarkers?: StreamWaypointMarker[]
+  onWaypointMarkerPress?: (marker: StreamWaypointMarker) => void
   postMarkers?: StreamPostMarker[]
   onPostMarkerPress?: (marker: StreamPostMarker) => void
   currentLocationMarker?: MapCoordinate | null
@@ -57,6 +81,14 @@ export interface SocialMapMarker {
 
 export interface StreamWaypointMarker extends MapCoordinate {
   id: string
+  synced?: boolean
+  recordedAt?: string
+  locationLabel?: string
+  source?: "public" | "local"
+  altitude?: number | null
+  mileMarker?: number | null
+  cumulativeVert?: number | null
+  pointIndex?: number | null
 }
 
 export interface StreamPostMarker extends MapCoordinate {
@@ -68,7 +100,7 @@ export interface StreamPostMarker extends MapCoordinate {
 }
 
 /**
- * A full-screen MapLibre map backed by OpenFreeMap vector tiles.
+ * A full-screen MapLibre map backed by OpenTopoMap raster tiles.
  * Exposes `flyTo` via a forwarded ref for programmatic camera control.
  */
 export const MapLibreMap = forwardRef<MapLibreMapRef, MapLibreMapProps>(function MapLibreMap(
@@ -78,6 +110,7 @@ export const MapLibreMap = forwardRef<MapLibreMapRef, MapLibreMapProps>(function
     onMarkerPress,
     trackCoordinates = [],
     waypointMarkers = [],
+    onWaypointMarkerPress,
     postMarkers = [],
     onPostMarkerPress,
     currentLocationMarker = null,
@@ -106,22 +139,6 @@ export const MapLibreMap = forwardRef<MapLibreMapRef, MapLibreMapProps>(function
       ],
     }
   }, [trackCoordinates])
-
-  const waypointShape = useMemo<FeatureCollection<Point> | null>(() => {
-    if (waypointMarkers.length === 0) return null
-
-    return {
-      type: "FeatureCollection",
-      features: waypointMarkers.map<Feature<Point>>((marker) => ({
-        type: "Feature",
-        properties: { id: marker.id },
-        geometry: {
-          type: "Point",
-          coordinates: [marker.longitude, marker.latitude],
-        },
-      })),
-    }
-  }, [waypointMarkers])
 
   useImperativeHandle(
     ref,
@@ -159,7 +176,7 @@ export const MapLibreMap = forwardRef<MapLibreMapRef, MapLibreMapProps>(function
     <MapLibreGL.MapView
       style={styles.map}
       ref={mapViewRef}
-      mapStyle={TILE_STYLE_URL}
+      mapStyle={TILE_STYLE}
       logoEnabled={false}
       zoomEnabled={true}
       scrollEnabled={true}
@@ -186,11 +203,28 @@ export const MapLibreMap = forwardRef<MapLibreMapRef, MapLibreMapProps>(function
         </MapLibreGL.ShapeSource>
       ) : null}
 
-      {waypointShape ? (
-        <MapLibreGL.ShapeSource id="stream-waypoints" shape={waypointShape}>
-          <MapLibreGL.CircleLayer id="stream-waypoint-circles" style={styles.waypointCircle} />
-        </MapLibreGL.ShapeSource>
-      ) : null}
+      {waypointMarkers.map((marker) => (
+        <MapLibreGL.MarkerView
+          key={marker.id}
+          coordinate={[marker.longitude, marker.latitude]}
+          allowOverlap={true}
+          anchor={{ x: 0.5, y: 0.5 }}
+        >
+          <Pressable
+            onPress={() => onWaypointMarkerPress?.(marker)}
+            accessibilityRole="button"
+            accessibilityLabel="Open waypoint details"
+            style={styles.waypointMarkerPressable}
+          >
+            <View
+              style={[
+                styles.waypointCircle,
+                marker.synced === false ? styles.waypointCirclePending : null,
+              ]}
+            />
+          </Pressable>
+        </MapLibreGL.MarkerView>
+      ))}
 
       {currentLocationMarker ? (
         <MapLibreGL.MarkerView
@@ -263,11 +297,22 @@ const styles = StyleSheet.create({
     lineJoin: "round",
   },
   waypointCircle: {
-    circleRadius: 6,
-    circleColor: "#ffffff",
-    circleStrokeWidth: 2,
-    circleStrokeColor: "#0f172a",
-    circleOpacity: 1,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: "#ffffff",
+    borderWidth: 2,
+    borderColor: "#0f172a",
+  },
+  waypointCirclePending: {
+    backgroundColor: "#fed7aa",
+    borderColor: "#ea580c",
+  },
+  waypointMarkerPressable: {
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
   },
   currentLocationMarker: {
     width: 18,

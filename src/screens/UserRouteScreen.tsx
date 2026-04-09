@@ -5,6 +5,7 @@ import {
   Image,
   ImageStyle,
   PanResponder,
+  Pressable,
   StyleSheet,
   TextStyle,
   View,
@@ -41,13 +42,14 @@ type ElevCoord = {
   cumulativeVert: number
 }
 
-const CHART_BAR_COUNT = 180
+const CHART_BAR_COUNT = 260
+const CHART_SMOOTHING_RADIUS = 4
 const SCREEN_HEIGHT = Dimensions.get("window").height
-const PROFILE_PANEL_HEIGHT = Math.round(SCREEN_HEIGHT * 0.4)
+const PROFILE_PANEL_HEIGHT = Math.round(SCREEN_HEIGHT * 0.56)
 const MAP_SECTION_HEIGHT = SCREEN_HEIGHT - PROFILE_PANEL_HEIGHT
-const CHART_HEIGHT = Math.max(100, PROFILE_PANEL_HEIGHT - 100)
+const CHART_HEIGHT = Math.max(180, PROFILE_PANEL_HEIGHT - 118)
 const CHART_MIN_BAR_HEIGHT = 6
-const CHART_MAX_FILL_RATIO = 0.88
+const CHART_MAX_FILL_RATIO = 0.92
 
 // ── GeoJSON parsing ────────────────────────────────────────────────────────────
 function parseGeoJsonCoords(json: unknown): ElevCoord[] {
@@ -144,10 +146,27 @@ function ElevationChart({ coords, uom, onScrub }: ElevationChartProps) {
 
   const { minElev, elevRange } = useMemo(() => {
     if (bars.length === 0) return { minElev: 0, elevRange: 1 }
-    const elevs = bars.map((b) => b.elevation)
+    const elevs = bars.map((_, i) => {
+      const start = Math.max(0, i - CHART_SMOOTHING_RADIUS)
+      const end = Math.min(bars.length - 1, i + CHART_SMOOTHING_RADIUS)
+      let total = 0
+      for (let j = start; j <= end; j += 1) total += bars[j]!.elevation
+      return total / (end - start + 1)
+    })
     const min = Math.min(...elevs)
     const max = Math.max(...elevs)
     return { minElev: min, elevRange: max - min || 1 }
+  }, [bars])
+
+  const smoothedElevations = useMemo(() => {
+    if (bars.length === 0) return [] as number[]
+    return bars.map((_, i) => {
+      const start = Math.max(0, i - CHART_SMOOTHING_RADIUS)
+      const end = Math.min(bars.length - 1, i + CHART_SMOOTHING_RADIUS)
+      let total = 0
+      for (let j = start; j <= end; j += 1) total += bars[j]!.elevation
+      return total / (end - start + 1)
+    })
   }, [bars])
 
   const barWidth = containerWidth > 0 && bars.length > 0 ? containerWidth / bars.length : 2
@@ -208,7 +227,9 @@ function ElevationChart({ coords, uom, onScrub }: ElevationChartProps) {
   )
 
   const activeDotY =
-    activeBar != null ? containerHeight - getBarHeight(activeBar.elevation) : null
+    activeBar != null && activeIndex != null
+      ? containerHeight - getBarHeight(smoothedElevations[activeIndex] ?? activeBar.elevation)
+      : null
 
   const distUnit = uom === "METRIC" ? "km" : "mi"
   const elevUnit = "ft"
@@ -239,7 +260,7 @@ function ElevationChart({ coords, uom, onScrub }: ElevationChartProps) {
                 $bar,
                 {
                   width: barWidth,
-                  height: getBarHeight(bar.elevation),
+                  height: getBarHeight(smoothedElevations[i] ?? bar.elevation),
                 },
               ]}
             />
@@ -452,6 +473,7 @@ export const UserRouteScreen: FC<UserRouteScreenProps> = function UserRouteScree
             text="← Back"
             onPress={() => router.replace(`/(app)/user/${username}`)}
             style={screenStyles.backButton}
+            textStyle={screenStyles.backButtonText}
           />
         </View>
 
@@ -461,28 +483,6 @@ export const UserRouteScreen: FC<UserRouteScreenProps> = function UserRouteScree
           </View>
         )}
 
-        {!loading && !error && user && route ? (
-          <View style={[screenStyles.profileBadgeWrap, { top: insets.top + 400 }]}>
-            <View style={themed($profileBadge)}>
-              {user.profilePicture ? (
-                <Image source={{ uri: user.profilePicture }} style={themed($avatar)} />
-              ) : (
-                <View style={themed($avatarFallback)}>
-                  <Text text={username.charAt(0).toUpperCase()} size="xs" weight="medium" />
-                </View>
-              )}
-              <View style={themed($badgeCopy)}>
-                <Text text={route.name} size="xs" weight="medium" numberOfLines={1} />
-                <Text
-                  text={`@${username} · ${formatDistance(route.distanceInMiles, route.uom)} · +${formatGain(route.gainInFeet, route.uom)}`}
-                  size="xxs"
-                  style={themed($subtleText)}
-                  numberOfLines={1}
-                />
-              </View>
-            </View>
-          </View>
-        ) : null}
       </View>
 
       {loading ? (
@@ -511,9 +511,42 @@ export const UserRouteScreen: FC<UserRouteScreenProps> = function UserRouteScree
           ]}
         >
           <View style={themed($elevSection)}>
+            <View style={themed($userHeaderRow)}>
+              {user.profilePicture ? (
+                <Image source={{ uri: user.profilePicture }} style={themed($avatar)} />
+              ) : (
+                <View style={themed($avatarFallback)}>
+                  <Text text={username.charAt(0).toUpperCase()} size="xs" weight="medium" />
+                </View>
+              )}
+              <View style={themed($userHeaderMetaRow)}>
+                <Pressable
+                  onPress={() => router.push(`/(app)/user/${username}`)}
+                  accessibilityRole="link"
+                  accessibilityLabel={`Open @${username} profile`}
+                >
+                  <Text
+                    text={`@${username}`}
+                    size="sm"
+                    weight="medium"
+                    style={themed($userLinkText)}
+                    numberOfLines={1}
+                  />
+                </Pressable>
+                <Text
+                  text={`  -  ${formatDistance(route.distanceInMiles, route.uom)}  -  +${formatGain(route.gainInFeet, route.uom)}`}
+                  size="sm"
+                  weight="medium"
+                  style={themed($userHeaderText)}
+                  numberOfLines={1}
+                />
+              </View>
+            </View>
+
             <View style={themed($elevHeader)}>
-              <Text text="Elevation" size="xs" weight="medium" />
-              <Text text="Drag to scrub" size="xxs" style={themed($subtleText)} />
+              <View style={themed($elevHeaderTextWrap)}>
+                <Text text={route.name} size="sm" style={themed($elevMeta)} numberOfLines={1} />
+              </View>
             </View>
 
             {geoError ? (
@@ -540,7 +573,7 @@ export const UserRouteScreen: FC<UserRouteScreenProps> = function UserRouteScree
 const screenStyles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: "#ffffff",
+    backgroundColor: "#0b1120",
   },
   mapSection: {
     overflow: "hidden",
@@ -554,7 +587,11 @@ const screenStyles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.94)",
+    borderWidth: 0,
+    backgroundColor: "rgba(15,23,42,0.78)",
+  },
+  backButtonText: {
+    color: "#ffffff",
   },
   geoLoadingOverlay: {
     position: "absolute",
@@ -574,16 +611,10 @@ const screenStyles = StyleSheet.create({
     paddingHorizontal: 20,
     zIndex: 20,
   },
-  profileBadgeWrap: {
-    position: "absolute",
-    left: 16,
-    right: 64,
-    zIndex: 20,
-  },
   profilePanel: {
     flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingHorizontal: 10,
+    paddingTop: 10,
   },
 })
 
@@ -596,8 +627,8 @@ const $chartContainer: ViewStyle = {
   flex: 1,
   width: "100%",
   overflow: "hidden",
-  borderRadius: 18,
-  backgroundColor: "#eef4ff",
+  borderRadius: 16,
+  backgroundColor: "#171a29",
   position: "relative",
 }
 
@@ -612,12 +643,14 @@ const $barsRow: ViewStyle = {
 }
 
 const $bar: ViewStyle = {
-  backgroundColor: "rgba(37,99,235,0.78)",
+  backgroundColor: "rgba(58,138,255,0.9)",
+  borderTopLeftRadius: 2,
+  borderTopRightRadius: 2,
 }
 
 const $scrubLine: ViewStyle = {
   width: 1.5,
-  backgroundColor: "rgba(255,255,255,0.55)",
+  backgroundColor: "rgba(255,255,255,0.35)",
 }
 
 const $scrubDot: ViewStyle = {
@@ -625,23 +658,23 @@ const $scrubDot: ViewStyle = {
   width: 10,
   height: 10,
   borderRadius: 5,
-  backgroundColor: "#3b82f6",
+  backgroundColor: "#3a8aff",
   borderWidth: 2,
-  borderColor: "#ffffff",
+  borderColor: "#c7dbff",
 }
 
 const $distanceRow: ViewStyle = {
   flexDirection: "row",
   justifyContent: "space-between",
-  marginTop: 10,
+  marginTop: 12,
 }
 
 const $dimText: TextStyle = {
-  color: "rgba(100,116,139,0.9)",
+  color: "rgba(160,172,194,0.95)",
 }
 
 const $activeLabel: TextStyle = {
-  color: "#3b82f6",
+  color: "#8eb7ff",
   fontWeight: "600",
 }
 
@@ -698,37 +731,58 @@ const $subtleText: ThemedStyle<TextStyle> = ({ colors }) => ({
   color: colors.textDim,
 })
 
-const $profileBadge: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
+const $elevTitle: ThemedStyle<TextStyle> = () => ({
+  color: "#eef2ff",
+})
+
+const $elevMeta: ThemedStyle<TextStyle> = () => ({
+  color: "#a7b0c8",
+})
+
+const $userHeaderText: ThemedStyle<TextStyle> = () => ({
+  color: "#d8e3ff",
+})
+
+const $userLinkText: ThemedStyle<TextStyle> = () => ({
+  color: "#9ec4ff",
+})
+
+const $userHeaderMetaRow: ThemedStyle<ViewStyle> = () => ({
+  flex: 1,
+  flexDirection: "row",
+  alignItems: "center",
+})
+
+const $userHeaderRow: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   flexDirection: "row",
   alignItems: "center",
   gap: spacing.xs,
-  backgroundColor: colors.background,
-  borderRadius: 999,
-  paddingVertical: spacing.xs,
-  paddingHorizontal: spacing.sm,
-  shadowColor: colors.palette.neutral900,
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.15,
-  shadowRadius: 8,
-  elevation: 4,
+  minHeight: 34,
 })
 
 const $elevSection: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
   flex: 1,
-  gap: spacing.sm,
-  padding: spacing.md,
-  borderTopLeftRadius: 28,
-  borderTopRightRadius: 28,
+  gap: spacing.md,
+  paddingHorizontal: spacing.md,
+  paddingTop: spacing.md,
+  paddingBottom: spacing.sm,
+  borderTopLeftRadius: 24,
+  borderTopRightRadius: 24,
   borderWidth: 1,
-  borderColor: colors.palette.neutral300,
-  backgroundColor: colors.background,
+  borderColor: "#252a3f",
+  backgroundColor: "#101423",
 })
 
 const $elevHeader: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   flexDirection: "row",
   justifyContent: "space-between",
-  alignItems: "center",
+  alignItems: "flex-start",
   gap: spacing.xs,
+})
+
+const $elevHeaderTextWrap: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  flex: 1,
+  gap: spacing.xxs,
 })
 
 const $profileCopy: ThemedStyle<ViewStyle> = ({ spacing }) => ({
