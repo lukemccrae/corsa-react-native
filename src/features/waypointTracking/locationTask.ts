@@ -12,7 +12,8 @@ import * as TaskManager from "expo-task-manager"
 import { appendWaypoint } from "./waypointStorage"
 import { getActiveStreamId } from "./waypointStorage"
 import type { Waypoint } from "./waypointTypes"
-import { IOS_DISTANCE_INTERVAL_M, TRACKING_TASK_NAME } from "./waypointTypes"
+import type { TrackingPowerMode } from "./waypointTypes"
+import { TRACKING_TASK_NAME } from "./waypointTypes"
 
 export const TRACKING_UNAVAILABLE_MESSAGE =
   "Background location tracking requires a development build or standalone app. Expo Go and web do not support Expo Task Manager background execution for this feature."
@@ -29,12 +30,29 @@ async function ensureTaskManagerAvailable(): Promise<void> {
   }
 }
 
-async function captureCurrentWaypoint(streamId: string): Promise<Waypoint> {
+function getAccuracy(powerMode: TrackingPowerMode): Location.Accuracy {
+  if (powerMode === "battery_saver") {
+    return Location.Accuracy.Balanced
+  }
+
+  return Platform.OS === "ios" ? Location.Accuracy.BestForNavigation : Location.Accuracy.High
+}
+
+function getIosDistanceIntervalM(intervalMinutes: number, powerMode: TrackingPowerMode): number {
+  const minutesScaled = Math.max(25, Math.min(250, Math.round(intervalMinutes * 8)))
+  if (powerMode === "battery_saver") {
+    return Math.max(60, minutesScaled)
+  }
+
+  return minutesScaled
+}
+
+async function captureCurrentWaypoint(
+  streamId: string,
+  powerMode: TrackingPowerMode = "balanced",
+): Promise<Waypoint> {
   const current = await Location.getCurrentPositionAsync({
-    accuracy:
-      Platform.OS === "ios"
-        ? Location.Accuracy.BestForNavigation
-        : Location.Accuracy.High,
+    accuracy: getAccuracy(powerMode),
   })
 
   const waypoint: Waypoint = {
@@ -90,14 +108,23 @@ export type PermissionResult =
   | "task_manager_unavailable"
 
 /**
- * Request foreground then background location permissions.
+ * Request location permissions.
+ *
+ * Foreground permission is always requested first. Background permission is
+ * only requested when requireBackground=true.
  * Returns a PermissionResult describing the outcome.
  */
-export async function requestLocationPermissions(): Promise<PermissionResult> {
+export async function requestLocationPermissions(options?: {
+  requireBackground?: boolean
+}): Promise<PermissionResult> {
   if (!(await isTaskManagerAvailable())) return "task_manager_unavailable"
+
+  const requireBackground = options?.requireBackground ?? false
 
   const fg = await Location.requestForegroundPermissionsAsync()
   if (fg.status !== "granted") return "foreground_denied"
+
+  if (!requireBackground) return "granted"
 
   const bg = await Location.requestBackgroundPermissionsAsync()
   if (bg.status !== "granted") return "background_denied"
@@ -111,25 +138,26 @@ export async function requestLocationPermissions(): Promise<PermissionResult> {
  * Start background location updates at the given interval (minutes).
  * Throws if permissions have not been granted.
  */
-export async function startLocationTracking(intervalMinutes: number): Promise<void> {
+export async function startLocationTracking(
+  intervalMinutes: number,
+  powerMode: TrackingPowerMode = "balanced",
+): Promise<void> {
   await ensureTaskManagerAvailable()
 
   const msInterval = intervalMinutes * 60 * 1000
+  const iosDistanceIntervalM = getIosDistanceIntervalM(intervalMinutes, powerMode)
 
   const options: Location.LocationTaskOptions = {
-    accuracy:
-      Platform.OS === "ios"
-        ? Location.Accuracy.BestForNavigation
-        : Location.Accuracy.High,
+    accuracy: getAccuracy(powerMode),
     showsBackgroundLocationIndicator: true,
-    pausesUpdatesAutomatically: false,
+    pausesUpdatesAutomatically: true,
     ...(Platform.OS === "android"
       ? { timeInterval: msInterval, distanceInterval: 0 }
       : {
           // iOS does not support timeInterval reliably; use distance + deferred
-          distanceInterval: IOS_DISTANCE_INTERVAL_M,
+          distanceInterval: iosDistanceIntervalM,
           deferredUpdatesInterval: msInterval,
-          deferredUpdatesDistance: IOS_DISTANCE_INTERVAL_M,
+          deferredUpdatesDistance: iosDistanceIntervalM,
         }),
   }
 
@@ -139,7 +167,7 @@ export async function startLocationTracking(intervalMinutes: number): Promise<vo
   const streamId = getActiveStreamId()
   if (streamId) {
     try {
-      await captureCurrentWaypoint(streamId)
+      await captureCurrentWaypoint(streamId, powerMode)
     } catch {
       // If we cannot get an immediate fix, background updates will still continue.
     }

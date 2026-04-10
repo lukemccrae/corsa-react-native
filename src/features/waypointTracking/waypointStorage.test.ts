@@ -2,6 +2,7 @@ import { storage } from "@/utils/storage"
 import {
   appendWaypoint,
   clearWaypoints,
+  removeWaypointsByIds,
   getAllWaypoints,
   getActiveStreamId,
   getWaypoint,
@@ -12,7 +13,7 @@ import {
   clearActiveStreamId,
 } from "./waypointStorage"
 import type { Waypoint } from "./waypointTypes"
-import { DEFAULT_INTERVAL_MINUTES } from "./waypointTypes"
+import { DEFAULT_TRACKING_CONFIG } from "./waypointTypes"
 
 const makeWaypoint = (overrides: Partial<Waypoint> = {}): Waypoint => ({
   streamId: "stream-1",
@@ -97,6 +98,23 @@ describe("waypointStorage", () => {
     })
   })
 
+  describe("removeWaypointsByIds", () => {
+    it("removes only the provided waypoint IDs", () => {
+      const w1 = makeWaypoint({ timestamp: 1704067200000 })
+      const w2 = makeWaypoint({ timestamp: 1704067500000 })
+      const w3 = makeWaypoint({ timestamp: 1704067800000 })
+
+      appendWaypoint(w1)
+      appendWaypoint(w2)
+      appendWaypoint(w3)
+
+      removeWaypointsByIds([`${w2.streamId}_${w2.timestamp}`])
+
+      expect(getAllWaypoints()).toEqual([w1, w3])
+      expect(getWaypointCount()).toBe(2)
+    })
+  })
+
   // ─── stream id ────────────────────────────────────────────────────────────
 
   describe("stream id helpers", () => {
@@ -120,12 +138,15 @@ describe("waypointStorage", () => {
 
   describe("tracking config", () => {
     it("returns the default config when nothing is stored", () => {
-      expect(loadTrackingConfig()).toEqual({ intervalMinutes: DEFAULT_INTERVAL_MINUTES })
+      expect(loadTrackingConfig()).toEqual(DEFAULT_TRACKING_CONFIG)
     })
 
     it("persists and retrieves a custom config", () => {
       saveTrackingConfig({ intervalMinutes: 10 })
-      expect(loadTrackingConfig()).toEqual({ intervalMinutes: 10 })
+      expect(loadTrackingConfig()).toEqual({
+        ...DEFAULT_TRACKING_CONFIG,
+        intervalMinutes: 10,
+      })
     })
   })
 })

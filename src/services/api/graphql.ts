@@ -989,9 +989,9 @@ export type NativeWaypointUploadInput = {
 export async function ingestNativeWaypoints(
   inputs: NativeWaypointUploadInput[],
   idToken: string,
-): Promise<{ uploaded: number; failed: number; errors: string[] }> {
+): Promise<{ uploaded: number; failed: number; errors: string[]; successIndexes: number[] }> {
   if (inputs.length === 0) {
-    return { uploaded: 0, failed: 0, errors: [] }
+    return { uploaded: 0, failed: 0, errors: [], successIndexes: [] }
   }
 
   const settled = await Promise.allSettled(
@@ -1008,13 +1008,24 @@ export async function ingestNativeWaypoints(
     ),
   )
 
-  const errors = settled
-    .filter((result): result is PromiseRejectedResult => result.status === "rejected")
-    .map((result) => (result.reason instanceof Error ? result.reason.message : "Could not upload waypoint."))
+  const successIndexes: number[] = []
+  const errors: string[] = []
+
+  settled.forEach((result, index) => {
+    if (result.status === "fulfilled") {
+      successIndexes.push(index)
+      return
+    }
+
+    errors.push(
+      result.reason instanceof Error ? result.reason.message : "Could not upload waypoint.",
+    )
+  })
 
   return {
     uploaded: settled.length - errors.length,
     failed: errors.length,
     errors,
+    successIndexes,
   }
 }

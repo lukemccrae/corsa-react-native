@@ -26,7 +26,20 @@ import {
 import { DEFAULT_INTERVAL_MINUTES } from "@/features/waypointTracking/waypointTypes"
 import { getRandomValues } from "expo-crypto"
 
-const INTERVAL_OPTIONS = [1, 2, 5, 10, 15, 30]
+const INTERVAL_OPTIONS = [1, 10, 30, 60]
+
+function confirmBackgroundLocationPrompt(): Promise<boolean> {
+  return new Promise((resolve) => {
+    Alert.alert(
+      "Enable background waypoint tracking?",
+      "If you continue, Corsa will request 'Always' location so your route can keep recording after you lock your phone or leave the app. This is only used for activity tracking and is not used for ads.",
+      [
+        { text: "Not now", style: "cancel", onPress: () => resolve(false) },
+        { text: "Continue", onPress: () => resolve(true) },
+      ],
+    )
+  })
+}
 
 /** Generate a UUID v4 using expo-crypto for managed-workflow compatibility. */
 function generateUUID(): string {
@@ -67,7 +80,10 @@ export const WaypointTrackingScreen: FC = function WaypointTrackingScreen() {
     setPermissionError(null)
 
     try {
-      const result = await requestLocationPermissions()
+      const shouldRequestBackground = await confirmBackgroundLocationPrompt()
+      if (!shouldRequestBackground) return
+
+      const result = await requestLocationPermissions({ requireBackground: true })
       if (result === "task_manager_unavailable") {
         setPermissionError(TRACKING_UNAVAILABLE_MESSAGE)
         return
@@ -208,7 +224,7 @@ export const WaypointTrackingScreen: FC = function WaypointTrackingScreen() {
           {INTERVAL_OPTIONS.map((opt) => (
             <Button
               key={opt}
-              text={`${opt} min`}
+              text={opt === 60 ? "1 hour" : `${opt} min`}
               preset={intervalMinutes === opt ? "filled" : "default"}
               onPress={() => handleIntervalChange(opt)}
               style={themed($intervalButton)}

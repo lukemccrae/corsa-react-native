@@ -77,11 +77,12 @@ module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
       [
         "expo-location",
         {
-          locationWhenInUsePermission: "$(PRODUCT_NAME) uses your location to show it on the map.",
+            locationWhenInUsePermission:
+              "$(PRODUCT_NAME) uses your location to show your position and route while you use map and activity features.",
           locationAlwaysAndWhenInUsePermission:
-            "$(PRODUCT_NAME) records your location in the background to track waypoints on your activity.",
+              "If you start waypoint tracking, $(PRODUCT_NAME) records your location in the background to save your activity route even when the app is closed.",
           locationAlwaysPermission:
-            "$(PRODUCT_NAME) records your location in the background to track waypoints on your activity.",
+              "If you start waypoint tracking, $(PRODUCT_NAME) records your location in the background to save your activity route even when the app is closed.",
           isIosBackgroundLocationEnabled: true,
           isAndroidBackgroundLocationEnabled: true,
         },

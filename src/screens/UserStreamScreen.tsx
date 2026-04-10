@@ -26,6 +26,7 @@ import {
   type StreamWaypointMarker,
 } from "@/components/Map/MapLibreMap"
 import { Button } from "@/components/Button"
+import { PressableIcon } from "@/components/Icon"
 import { Screen } from "@/components/Screen"
 import { Text } from "@/components/Text"
 import type { ChatMessage, LiveStream, Post, User, Waypoint } from "@/generated/schema"
@@ -40,18 +41,44 @@ import type { ThemedStyle } from "@/theme/types"
 import { useAuth } from "@/providers/AuthProvider"
 import {
   isTrackingActive,
+  recordCurrentWaypointNow,
   requestLocationPermissions,
   startLocationTracking,
   stopLocationTracking,
   TRACKING_UNAVAILABLE_MESSAGE,
 } from "@/features/waypointTracking/locationTask"
+import type {
+  TrackingCaptureMode,
+  TrackingPowerMode,
+  TrackingSyncMode,
+} from "@/features/waypointTracking/waypointTypes"
 import {
   clearActiveStreamId,
   getAllWaypoints,
   getActiveStreamId,
   loadTrackingConfig,
+  removeWaypointsByIds,
+  saveTrackingConfig,
   setActiveStreamId,
 } from "@/features/waypointTracking/waypointStorage"
+
+const INTERVAL_OPTIONS = [1, 10, 30, 60]
+const CAPTURE_MODE_OPTIONS: TrackingCaptureMode[] = ["auto", "manual"]
+const SYNC_MODE_OPTIONS: TrackingSyncMode[] = ["manual", "auto"]
+const POWER_MODE_OPTIONS: TrackingPowerMode[] = ["balanced", "battery_saver"]
+
+function confirmBackgroundLocationPrompt(): Promise<boolean> {
+  return new Promise((resolve) => {
+    Alert.alert(
+      "Enable background waypoint tracking?",
+      "If you continue, Corsa will request 'Always' location so your route can keep recording after you lock your phone or leave the app. This is only used for activity tracking and is not used for ads.",
+      [
+        { text: "Not now", style: "cancel", onPress: () => resolve(false) },
+        { text: "Continue", onPress: () => resolve(true) },
+      ],
+    )
+  })
+}
 
 interface UserStreamScreenProps {
   username: string
@@ -71,6 +98,35 @@ function formatDateTime(value: string | number | null | undefined) {
     hour: "numeric",
     minute: "2-digit",
   }).format(parsedDate)
+}
+
+function formatMarkerTimestamp(
+  value: string | number | null | undefined,
+  startTime: string | number | null | undefined,
+) {
+  if (!value) return null
+
+  const parsedDate = new Date(value)
+  if (Number.isNaN(parsedDate.getTime())) return null
+
+  const parsedStart = startTime ? new Date(startTime) : null
+  const hasValidStart = parsedStart != null && !Number.isNaN(parsedStart.getTime())
+
+  const elapsedSeconds = hasValidStart
+    ? Math.max(0, Math.floor((parsedDate.getTime() - parsedStart.getTime()) / 1000))
+    : 0
+
+  const day = String(Math.floor(elapsedSeconds / 86400)).padStart(2, "0")
+  const hours = String(Math.floor((elapsedSeconds % 86400) / 3600)).padStart(2, "0")
+  const minutes = String(Math.floor((elapsedSeconds % 3600) / 60)).padStart(2, "0")
+  const seconds = String(elapsedSeconds % 60).padStart(2, "0")
+  const dateLabel = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(parsedDate)
+
+  return `${day}d ${hours}h ${minutes}m ${seconds}s • ${dateLabel}`
 }
 
 function formatDistance(miles: number, uom?: string | null) {
@@ -113,17 +169,6 @@ function getPostText(post: StreamPostEntry) {
   return post.text?.trim() || "Shared an update from the route."
 }
 
-function getPostMediaLabel(post: StreamPostEntry) {
-  const photoCount = post.images?.filter(Boolean).length ?? 0
-  const mediaCount = post.media?.filter(Boolean).length ?? 0
-
-  if (photoCount > 0) return `${photoCount} photo${photoCount === 1 ? "" : "s"}`
-  if (mediaCount > 0) return `${mediaCount} attachment${mediaCount === 1 ? "" : "s"}`
-  if (post.imagePath) return "1 photo"
-
-  return null
-}
-
 function getPostImageUrls(post: StreamPostEntry) {
   const imagePathsFromPhotoPost = post.images?.filter(Boolean).map((path) => path as string) ?? []
   const imagePathFromStatusPost = post.imagePath ? [post.imagePath] : []
@@ -139,8 +184,6 @@ function getPostImageUrls(post: StreamPostEntry) {
 
   return [...new Set([...imagePathsFromPhotoPost, ...imagePathFromStatusPost, ...imagePathsFromMedia])]
 }
-
-const DEFAULT_MAP_POST_IMAGE_ASPECT_RATIO = 4 / 3
 
 function getInitialZoomLevel(points: MapCoordinate[]) {
   if (points.length <= 1) return 11
@@ -408,6 +451,7 @@ function LiveChatSection({ username, streamId, messages: initialMessages, nextTo
 }
 
 function PostCard({ post, onPressImage }: { post: StreamPostEntry; onPressImage: (imageUrl: string) => void }) {
+  const { themed } = useAppTheme()
   const latitude = post.location?.lat
   const longitude = post.location?.lng
   const postTypeLabel = post.type === "STATUS" ? null : post.type
@@ -416,34 +460,33 @@ function PostCard({ post, onPressImage }: { post: StreamPostEntry; onPressImage:
     hasCoordinate(latitude) && hasCoordinate(longitude)
       ? formatCoordinateLabel(latitude, longitude)
       : null
-  const mediaLabel = getPostMediaLabel(post)
   const imageUrls = getPostImageUrls(post)
   const primaryImageUrl = imageUrls[0] ?? null
   const additionalImageUrls = imageUrls.slice(1)
 
   return (
-    <View style={$postCard}>
+    <View style={themed($postCard)}>
       <View style={$postHeader}>
         <View style={$postHeaderLeft}>
           {postTypeLabel ? (
-            <View style={$postTypePill}>
-              <Text text={postTypeLabel} weight="medium" size="xxs" style={$postTypePillText} />
+            <View style={themed($postTypePill)}>
+              <Text text={postTypeLabel} weight="medium" size="xxs" style={themed($postTypePillText)} />
             </View>
           ) : null}
         </View>
-        <Text text={createdAtLabel} size="xxs" style={$postTimestamp} />
+        <Text text={createdAtLabel} size="xxs" style={themed($postTimestamp)} />
       </View>
+      <Text text={getPostText(post)} size="xs" style={themed($postText)} />
       {primaryImageUrl ? (
         <Pressable
           onPress={() => onPressImage(primaryImageUrl)}
-          style={({ pressed }) => [$postHeroImageFrame, pressed && $postImageTilePressed]}
+          style={({ pressed }) => [themed($postHeroImageFrame), pressed && $postImageTilePressed]}
           accessibilityRole="button"
           accessibilityLabel="Open post photo"
         >
           <Image source={{ uri: primaryImageUrl }} style={$postImage} resizeMode="contain" />
         </Pressable>
       ) : null}
-      <Text text={getPostText(post)} size="xs" style={$postText} />
       {additionalImageUrls.length > 0 ? (
         <ScrollView
           horizontal
@@ -456,7 +499,7 @@ function PostCard({ post, onPressImage }: { post: StreamPostEntry; onPressImage:
             <Pressable
               key={`${post.userId}-${post.createdAt}-image-${index + 1}`}
               onPress={() => onPressImage(imageUrl)}
-              style={({ pressed }) => [$postImageTile, pressed && $postImageTilePressed]}
+              style={({ pressed }) => [themed($postImageTile), pressed && $postImageTilePressed]}
               accessibilityRole="button"
               accessibilityLabel="Open post photo"
             >
@@ -467,13 +510,8 @@ function PostCard({ post, onPressImage }: { post: StreamPostEntry; onPressImage:
       ) : null}
       <View style={$postFooter}>
         {coordinateLabel ? (
-          <View style={$postMetaChip}>
-            <Text text={`Pinned ${coordinateLabel}`} size="xxs" style={$postMetaChipText} />
-          </View>
-        ) : null}
-        {mediaLabel ? (
-          <View style={$postMetaChip}>
-            <Text text={mediaLabel} size="xxs" style={$postMetaChipText} />
+          <View style={themed($postMetaChip)}>
+            <Text text={`Pinned ${coordinateLabel}`} size="xxs" style={themed($postMetaChipText)} />
           </View>
         ) : null}
       </View>
@@ -488,6 +526,7 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
   const { themed } = useAppTheme()
   const { user, appUser } = useAuth()
   const router = useRouter()
+  const initialTrackingConfig = useMemo(() => loadTrackingConfig(), [])
   const streamMapRef = useRef<MapLibreMapRef>(null)
   const [routeUser, setRouteUser] = useState<User | null>(null)
   const [stream, setStream] = useState<LiveStream | null>(null)
@@ -503,15 +542,22 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
   const [selectedPostImageUrl, setSelectedPostImageUrl] = useState<string | null>(null)
   const [selectedMapPostMarker, setSelectedMapPostMarker] = useState<StreamPostMarker | null>(null)
   const [selectedMapWaypointMarker, setSelectedMapWaypointMarker] = useState<StreamWaypointMarker | null>(null)
-  const [selectedMapPostImageAspectRatio, setSelectedMapPostImageAspectRatio] = useState(
-    DEFAULT_MAP_POST_IMAGE_ASPECT_RATIO,
-  )
+  const [selectedMapPostImageAspectRatio, setSelectedMapPostImageAspectRatio] = useState(4 / 3)
   const [chatNextToken, setChatNextToken] = useState<string | null>(null)
+  const [intervalMinutes, setIntervalMinutes] = useState(initialTrackingConfig.intervalMinutes)
+  const [captureMode, setCaptureMode] = useState<TrackingCaptureMode>(initialTrackingConfig.captureMode)
+  const [syncMode, setSyncMode] = useState<TrackingSyncMode>(initialTrackingConfig.syncMode)
+  const [powerMode, setPowerMode] = useState<TrackingPowerMode>(initialTrackingConfig.powerMode)
+  const [recordingSettingsVisible, setRecordingSettingsVisible] = useState(false)
+  const [draftIntervalMinutes, setDraftIntervalMinutes] = useState(initialTrackingConfig.intervalMinutes)
+  const [draftCaptureMode, setDraftCaptureMode] = useState<TrackingCaptureMode>(initialTrackingConfig.captureMode)
+  const [draftSyncMode, setDraftSyncMode] = useState<TrackingSyncMode>(initialTrackingConfig.syncMode)
+  const [draftPowerMode, setDraftPowerMode] = useState<TrackingPowerMode>(initialTrackingConfig.powerMode)
 
   useEffect(() => {
     const photoUrl = selectedMapPostMarker?.photoUrl
     if (!photoUrl) {
-      setSelectedMapPostImageAspectRatio(DEFAULT_MAP_POST_IMAGE_ASPECT_RATIO)
+      setSelectedMapPostImageAspectRatio(4 / 3)
       return
     }
 
@@ -526,11 +572,11 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
           return
         }
 
-        setSelectedMapPostImageAspectRatio(DEFAULT_MAP_POST_IMAGE_ASPECT_RATIO)
+        setSelectedMapPostImageAspectRatio(4 / 3)
       },
       () => {
         if (cancelled) return
-        setSelectedMapPostImageAspectRatio(DEFAULT_MAP_POST_IMAGE_ASPECT_RATIO)
+        setSelectedMapPostImageAspectRatio(4 / 3)
       },
     )
 
@@ -580,7 +626,7 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
   }, [refreshTrackingState])
 
   useEffect(() => {
-    const intervalMs = tracking ? 4000 : 12000
+    const intervalMs = tracking ? 10000 : 30000
     const timer = setInterval(() => setLocalWaypointRefreshTick((value) => value + 1), intervalMs)
     return () => clearInterval(timer)
   }, [tracking])
@@ -591,12 +637,42 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
     return Boolean(normalizedCurrentUsername) && normalizedProfileUsername === normalizedCurrentUsername
   }, [appUser?.username, username])
 
-  const handleStartTracking = useCallback(async () => {
+  const handleStartTracking = useCallback(async (settings?: {
+    intervalMinutes?: number
+    captureMode?: TrackingCaptureMode
+    powerMode?: TrackingPowerMode
+  }) => {
     setTrackingBusy(true)
     setTrackingError(null)
 
+    const selectedIntervalMinutes = settings?.intervalMinutes ?? intervalMinutes
+    const selectedCaptureMode = settings?.captureMode ?? captureMode
+    const selectedPowerMode = settings?.powerMode ?? powerMode
+
     try {
-      const result = await requestLocationPermissions()
+      if (selectedCaptureMode === "manual") {
+        const fg = await Location.requestForegroundPermissionsAsync()
+        if (fg.status !== "granted") {
+          setTrackingError(
+            "Foreground location permission is required. Please enable it in your device settings.",
+          )
+          return
+        }
+
+        if (tracking && activeTrackingStreamId && activeTrackingStreamId !== streamId) {
+          await stopLocationTracking()
+        }
+
+        setActiveStreamId(streamId)
+        await refreshTrackingState()
+        Alert.alert("Manual recording ready", "Use 'Record point now' to capture waypoints.")
+        return
+      }
+
+      const shouldRequestBackground = await confirmBackgroundLocationPrompt()
+      if (!shouldRequestBackground) return
+
+      const result = await requestLocationPermissions({ requireBackground: true })
       if (result === "task_manager_unavailable") {
         setTrackingError(TRACKING_UNAVAILABLE_MESSAGE)
         return
@@ -618,15 +694,14 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
         await stopLocationTracking()
       }
 
-      const config = loadTrackingConfig()
       setActiveStreamId(streamId)
-      await startLocationTracking(config.intervalMinutes)
+      await startLocationTracking(selectedIntervalMinutes, selectedPowerMode)
       await refreshTrackingState()
       setLocalWaypointRefreshTick((value) => value + 1)
 
       Alert.alert(
         "Tracking started",
-        `Now recording waypoints for stream ${streamId} every ${config.intervalMinutes} minute(s).`,
+        `Now recording waypoints for stream ${streamId} every ${selectedIntervalMinutes} minute(s).`,
       )
     } catch (trackingStartError) {
       setTrackingError(
@@ -638,7 +713,15 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
     } finally {
       setTrackingBusy(false)
     }
-  }, [activeTrackingStreamId, refreshTrackingState, streamId, tracking])
+  }, [
+    activeTrackingStreamId,
+    captureMode,
+    intervalMinutes,
+    powerMode,
+    refreshTrackingState,
+    streamId,
+    tracking,
+  ])
 
   const handleStopTracking = useCallback(async () => {
     setTrackingBusy(true)
@@ -659,6 +742,31 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
       setTrackingBusy(false)
     }
   }, [refreshTrackingState])
+
+  const handleRecordPointNow = useCallback(async () => {
+    setTrackingBusy(true)
+    setTrackingError(null)
+
+    try {
+      const fg = await Location.requestForegroundPermissionsAsync()
+      if (fg.status !== "granted") {
+        setTrackingError(
+          "Foreground location permission is required. Please enable it in your device settings.",
+        )
+        return
+      }
+
+      setActiveStreamId(streamId)
+      await recordCurrentWaypointNow(streamId)
+      setLocalWaypointRefreshTick((value) => value + 1)
+    } catch (recordError) {
+      setTrackingError(
+        recordError instanceof Error ? recordError.message : "Could not record a waypoint.",
+      )
+    } finally {
+      setTrackingBusy(false)
+    }
+  }, [streamId])
 
   const handleLogLocalWaypoints = useCallback(() => {
     const points = getAllWaypoints()
@@ -795,6 +903,19 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
     )
   }, [localWaypoints, publicWaypoints])
 
+  const progressMiles = useMemo(() => {
+    if (typeof stream?.mileMarker === "number" && Number.isFinite(stream.mileMarker)) {
+      return stream.mileMarker
+    }
+
+    const waypointMiles = mapWaypoints
+      .map((waypoint) => waypoint.mileMarker)
+      .filter((mileMarker): mileMarker is number => typeof mileMarker === "number" && Number.isFinite(mileMarker))
+
+    if (waypointMiles.length === 0) return null
+    return Math.max(...waypointMiles)
+  }, [mapWaypoints, stream?.mileMarker])
+
   const posts = useMemo(
     () =>
       (stream?.posts ?? [])
@@ -818,16 +939,19 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
         id: `${waypoint.streamId}-${waypoint.pointIndex ?? index}`,
         latitude: waypoint.lat,
         longitude: waypoint.lng,
-        recordedAt: formatDateTime(waypoint.timestamp) ?? String(waypoint.timestamp),
+        recordedAt:
+          formatMarkerTimestamp(waypoint.timestamp, stream?.startTime) ?? String(waypoint.timestamp),
         locationLabel: formatCoordinateLabel(waypoint.lat, waypoint.lng),
         source: waypoint.source,
         synced: waypoint.synced,
         altitude: waypoint.altitude ?? null,
         mileMarker: waypoint.mileMarker ?? null,
+        distanceLabel:
+          waypoint.mileMarker != null ? formatDistance(waypoint.mileMarker, stream?.unitOfMeasure) : null,
         cumulativeVert: waypoint.cumulativeVert ?? null,
         pointIndex: waypoint.pointIndex ?? null,
       })),
-    [mapWaypoints],
+    [mapWaypoints, stream?.startTime, stream?.unitOfMeasure],
   )
 
   const pendingWaypointCount = useMemo(
@@ -851,7 +975,7 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
           {
             id: `${post.userId}-${post.createdAt}`,
             title: getPostText(post),
-            createdAt: formatDateTime(post.createdAt) ?? post.createdAt,
+            createdAt: formatMarkerTimestamp(post.createdAt, stream?.startTime) ?? post.createdAt,
             locationLabel: formatCoordinateLabel(coordinate.latitude, coordinate.longitude),
             latitude: coordinate.latitude,
             longitude: coordinate.longitude,
@@ -859,7 +983,7 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
           },
         ]
       }),
-    [posts],
+    [posts, stream?.startTime],
   )
 
   const currentLocationMarker = useMemo(
@@ -880,7 +1004,9 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
   const initialZoomLevel = useMemo(() => getInitialZoomLevel(mapPoints), [mapPoints])
   const hasMapData = mapPoints.length > 0
 
-  const handleUploadPendingWaypoints = useCallback(async () => {
+  const handleUploadPendingWaypoints = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent === true
+
     if (!isOwnStream) return
 
     if (!user) {
@@ -889,7 +1015,9 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
     }
 
     if (pendingLocalWaypoints.length === 0) {
-      Alert.alert("No pending points", "All local waypoints are already synced.")
+      if (!silent) {
+        Alert.alert("No pending points", "All local waypoints are already synced.")
+      }
       return
     }
 
@@ -908,6 +1036,13 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
         idToken,
       )
 
+      const uploadedWaypointIds = result.successIndexes
+        .map((index) => pendingLocalWaypoints[index])
+        .filter(Boolean)
+        .map((waypoint) => `${waypoint.streamId}_${waypoint.timestamp}`)
+
+      removeWaypointsByIds(uploadedWaypointIds)
+
       const refreshed = await fetchUserStreamById(username, streamId)
       setStream(refreshed?.stream ?? null)
       setChatNextToken(refreshed?.chatNextToken ?? null)
@@ -917,10 +1052,12 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
         setUploadError(result.errors[0] ?? `${result.failed} waypoint upload request(s) failed.`)
       }
 
-      Alert.alert(
-        "Waypoint upload complete",
-        `${result.uploaded} uploaded${result.failed > 0 ? `, ${result.failed} failed` : ""}.`,
-      )
+      if (!silent) {
+        Alert.alert(
+          "Waypoint upload complete",
+          `${result.uploaded} uploaded${result.failed > 0 ? `, ${result.failed} failed` : ""}.`,
+        )
+      }
     } catch (uploadingError) {
       setUploadError(
         uploadingError instanceof Error ? uploadingError.message : "Could not upload pending waypoints.",
@@ -930,12 +1067,72 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
     }
   }, [isOwnStream, pendingLocalWaypoints, streamId, user, username])
 
+  useEffect(() => {
+    if (syncMode !== "auto") return
+    if (!isOwnStream || !user) return
+    if (uploadBusy || pendingLocalWaypoints.length === 0) return
+
+    const timer = setTimeout(() => {
+      void handleUploadPendingWaypoints({ silent: true })
+    }, 5000)
+
+    return () => clearTimeout(timer)
+  }, [handleUploadPendingWaypoints, isOwnStream, pendingLocalWaypoints.length, syncMode, uploadBusy, user])
+
   const handleProfilePress = useCallback(() => {
     router.replace(`/(app)/user/${username}`)
   }, [router, username])
   const handleBackToMapPress = useCallback(() => {
     router.replace("/(app)")
   }, [router])
+
+  const applyTrackingConfig = useCallback(
+    (next: Partial<{ intervalMinutes: number; captureMode: TrackingCaptureMode; syncMode: TrackingSyncMode; powerMode: TrackingPowerMode }>) => {
+      const nextInterval = next.intervalMinutes ?? intervalMinutes
+      const nextCaptureMode = next.captureMode ?? captureMode
+      const nextSyncMode = next.syncMode ?? syncMode
+      const nextPowerMode = next.powerMode ?? powerMode
+
+      setIntervalMinutes(nextInterval)
+      setCaptureMode(nextCaptureMode)
+      setSyncMode(nextSyncMode)
+      setPowerMode(nextPowerMode)
+
+      saveTrackingConfig({
+        intervalMinutes: nextInterval,
+        captureMode: nextCaptureMode,
+        syncMode: nextSyncMode,
+        powerMode: nextPowerMode,
+      })
+    },
+    [captureMode, intervalMinutes, powerMode, syncMode],
+  )
+
+  const openRecordingSettings = useCallback(() => {
+    setDraftIntervalMinutes(intervalMinutes)
+    setDraftCaptureMode(captureMode)
+    setDraftSyncMode(syncMode)
+    setDraftPowerMode(powerMode)
+    setRecordingSettingsVisible(true)
+  }, [captureMode, intervalMinutes, powerMode, syncMode])
+
+  const closeRecordingSettings = useCallback(() => {
+    setDraftIntervalMinutes(intervalMinutes)
+    setDraftCaptureMode(captureMode)
+    setDraftSyncMode(syncMode)
+    setDraftPowerMode(powerMode)
+    setRecordingSettingsVisible(false)
+  }, [captureMode, intervalMinutes, powerMode, syncMode])
+
+  const saveRecordingSettings = useCallback(() => {
+    applyTrackingConfig({
+      intervalMinutes: draftIntervalMinutes,
+      captureMode: draftCaptureMode,
+      syncMode: draftSyncMode,
+      powerMode: draftPowerMode,
+    })
+    setRecordingSettingsVisible(false)
+  }, [applyTrackingConfig, draftCaptureMode, draftIntervalMinutes, draftPowerMode, draftSyncMode])
 
   return (
     <Screen preset="scroll" contentContainerStyle={themed($screenContainer)}>
@@ -992,8 +1189,8 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
                 <Text text="Progress" size="xxs" style={themed($subtleText)} />
                 <Text
                   text={
-                    stream.mileMarker != null
-                      ? formatDistance(stream.mileMarker, stream.unitOfMeasure)
+                    progressMiles != null
+                      ? formatDistance(progressMiles, stream.unitOfMeasure)
                       : "No distance yet"
                   }
                   size="xs"
@@ -1014,63 +1211,52 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
             ) : null}
 
             {isOwnStream ? (
-              <View style={themed($trackingCard)}>
-                <Text text="Waypoint tracking" preset="formLabel" style={themed($trackingTitle)} />
-                <Text
-                  text={
-                    tracking && activeTrackingStreamId === streamId
-                      ? "Tracking is active for this stream."
-                      : tracking && activeTrackingStreamId
-                        ? `Tracking is active for another stream (${activeTrackingStreamId}).`
-                        : "Tracking is currently stopped."
-                  }
-                  size="xs"
-                  style={themed($subtleText)}
-                />
-                <Text
-                  text={`Recorded on this device for this stream: ${localWaypoints.length}`}
-                  size="xs"
-                  style={themed($subtleText)}
-                />
-                {trackingError ? (
-                  <Text text={trackingError} size="xs" style={themed($errorText)} />
-                ) : null}
-                {uploadError ? (
-                  <Text text={uploadError} size="xs" style={themed($errorText)} />
-                ) : null}
-                <View style={themed($trackingButtons)}>
-                  <Button
-                    text={
-                      tracking && activeTrackingStreamId === streamId
-                        ? "Tracking active"
-                        : "Start tracking this stream"
-                    }
-                    preset="filled"
-                    onPress={() => void handleStartTracking()}
-                    disabled={trackingBusy || (tracking && activeTrackingStreamId === streamId)}
-                    style={themed($trackingButton)}
-                  />
-                  <Button
-                    text="Stop tracking"
-                    preset="default"
-                    onPress={() => void handleStopTracking()}
-                    disabled={trackingBusy || !tracking}
-                    style={themed($trackingButton)}
-                  />
-                  <Button
-                    text={uploadBusy ? "Uploading pending points..." : `Upload pending (${pendingWaypointCount})`}
-                    preset="default"
-                    onPress={() => void handleUploadPendingWaypoints()}
-                    disabled={uploadBusy || pendingWaypointCount === 0}
-                    style={themed($trackingButton)}
-                  />
-                  <Button
-                    text="Log local points"
-                    preset="default"
-                    onPress={handleLogLocalWaypoints}
-                    style={themed($trackingButton)}
+              <View style={themed($recordingPanel)}>
+                <View style={themed($recordingRow)}>
+                  <View style={$recordingStatus}>
+                    <View
+                      style={[
+                        $recordingDot,
+                        tracking && activeTrackingStreamId === streamId
+                          ? $recordingDotActive
+                          : $recordingDotInactive,
+                      ]}
+                    />
+                    <Text
+                      text={
+                        tracking && activeTrackingStreamId === streamId
+                          ? "Recording"
+                          : captureMode === "manual" && activeTrackingStreamId === streamId
+                            ? "Manual ready"
+                          : "Not recording"
+                      }
+                      size="xs"
+                      style={
+                        tracking && activeTrackingStreamId === streamId
+                          ? $recordingActiveText
+                          : themed($subtleText)
+                      }
+                    />
+                  </View>
+                  <PressableIcon
+                    icon="settings"
+                    size={22}
+                    onPress={openRecordingSettings}
+                    accessibilityRole="button"
+                    accessibilityLabel="Open recording settings"
+                    hitSlop={12}
                   />
                 </View>
+
+                {captureMode === "manual" ? (
+                  <Button
+                    text={trackingBusy ? "Recording point..." : "Record point"}
+                    preset="filled"
+                    onPress={() => void handleRecordPointNow()}
+                    disabled={trackingBusy}
+                    style={themed($recordPointButton)}
+                  />
+                ) : null}
               </View>
             ) : null}
           </View>
@@ -1079,7 +1265,7 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
             <View style={themed($sectionHeader)}>
               <Text text="Map activity" preset="subheading" size="sm" />
               <Text
-                text={`${mapWaypoints.length} points • ${syncedWaypointCount} synced • ${pendingWaypointCount} pending • ${postMarkers.length} posts`}
+                text={`${mapWaypoints.length} points • ${postMarkers.length} posts`}
                 size="xxs"
                 style={themed($subtleText)}
               />
@@ -1163,7 +1349,7 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
                   <Text text="Waypoint" size="xs" style={themed($mapPostModalBody)} />
                   {selectedMapWaypointMarker.recordedAt ? (
                     <Text
-                      text={`Recorded ${selectedMapWaypointMarker.recordedAt}`}
+                      text={selectedMapWaypointMarker.recordedAt}
                       size="xxs"
                       style={themed($mapPostModalMeta)}
                     />
@@ -1175,35 +1361,22 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
                       style={themed($mapPostModalMeta)}
                     />
                   ) : null}
-                  <Text
-                    text={`Source ${selectedMapWaypointMarker.source === "local" ? "This device" : "Stream data"}`}
-                    size="xxs"
-                    style={themed($mapPostModalMeta)}
-                  />
                   {selectedMapWaypointMarker.synced === false ? (
-                    <Text
-                      text="Sync Pending upload"
-                      size="xxs"
-                      style={themed($mapPostModalMeta)}
-                    />
+                    <Text text="Sync Pending upload" size="xxs" style={themed($mapPostModalMeta)} />
                   ) : null}
                   {selectedMapWaypointMarker.altitude != null ? (
                     <Text
-                      text={`Altitude ${selectedMapWaypointMarker.altitude.toFixed(1)} m`}
+                      text={`Altitude ${(selectedMapWaypointMarker.altitude * 3.28084).toFixed(1)} ft`}
                       size="xxs"
                       style={themed($mapPostModalMeta)}
                     />
                   ) : null}
-                  {selectedMapWaypointMarker.mileMarker != null ? (
-                    <Text
-                      text={`Distance ${formatDistance(selectedMapWaypointMarker.mileMarker, stream.unitOfMeasure)}`}
-                      size="xxs"
-                      style={themed($mapPostModalMeta)}
-                    />
+                  {selectedMapWaypointMarker.distanceLabel ? (
+                    <Text text={selectedMapWaypointMarker.distanceLabel} size="xxs" style={themed($mapPostModalMeta)} />
                   ) : null}
                   {selectedMapWaypointMarker.cumulativeVert != null ? (
                     <Text
-                      text={`Vert ${selectedMapWaypointMarker.cumulativeVert.toFixed(1)} m`}
+                      text={`Vert ${(selectedMapWaypointMarker.cumulativeVert * 3.28084).toFixed(1)} ft`}
                       size="xxs"
                       style={themed($mapPostModalMeta)}
                     />
@@ -1294,25 +1467,271 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
               ) : null}
             </Pressable>
           </Modal>
+
+          <Modal
+            visible={recordingSettingsVisible}
+            transparent
+            animationType="slide"
+            onRequestClose={closeRecordingSettings}
+          >
+            <View style={themed($settingsModalBackdrop)}>
+              <Pressable
+                style={StyleSheet.absoluteFill}
+                onPress={closeRecordingSettings}
+                accessibilityRole="button"
+                accessibilityLabel="Close recording settings"
+              />
+              <View style={themed($settingsModalSheet)}>
+                {/* Header */}
+                <View style={themed($settingsModalHeader)}>
+                  <Text text="Recording settings" preset="subheading" size="sm" />
+                  <View style={$settingsHeaderActions}>
+                    <Button text="Close" preset="default" onPress={closeRecordingSettings} style={$settingsHeaderButton} />
+                    <Button text="Save" preset="filled" onPress={saveRecordingSettings} style={$settingsHeaderButton} />
+                  </View>
+                </View>
+
+                <ScrollView
+                  style={$settingsModalScroll}
+                  contentContainerStyle={themed($settingsModalScrollContent)}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                  nestedScrollEnabled
+                >
+                  {trackingError ? (
+                    <Text text={trackingError} size="xs" style={themed($errorText)} />
+                  ) : null}
+                  {uploadError ? (
+                    <Text text={uploadError} size="xs" style={themed($errorText)} />
+                  ) : null}
+
+                  <View style={themed($settingsSection)}>
+                    <Text text="Capture mode" size="xs" weight="medium" style={themed($settingsLabel)} />
+                    <View style={$optionRow}>
+                      {CAPTURE_MODE_OPTIONS.map((mode) => {
+                        const isSelected = draftCaptureMode === mode
+                        const baseLabel = mode === "auto" ? "Auto" : "Manual"
+
+                        return (
+                          <Button
+                            key={mode}
+                            text={baseLabel}
+                            accessibilityState={{ selected: isSelected }}
+                            preset={isSelected ? "filled" : "default"}
+                            onPress={() => setDraftCaptureMode(mode)}
+                            style={[
+                              $optionButton,
+                              isSelected && themed($optionButtonSelected),
+                            ]}
+                            textStyle={isSelected ? themed($optionButtonTextSelected) : undefined}
+                          />
+                        )
+                      })}
+                    </View>
+                    <Text
+                      text={
+                        draftCaptureMode === "auto"
+                          ? "Auto keeps background tracking running at the selected interval."
+                          : "Manual only records a point when you tap 'Record point now'."
+                      }
+                      size="xs"
+                      style={themed($subtleText)}
+                    />
+                  </View>
+
+                  <View style={themed($settingsSection)}>
+                    <Text text="Sync mode" size="xs" weight="medium" style={themed($settingsLabel)} />
+                    <View style={$optionRow}>
+                      {SYNC_MODE_OPTIONS.map((mode) => {
+                        const isSelected = draftSyncMode === mode
+                        const baseLabel = mode === "auto" ? "Auto sync" : "Manual sync"
+
+                        return (
+                          <Button
+                            key={mode}
+                            text={baseLabel}
+                            accessibilityState={{ selected: isSelected }}
+                            preset={isSelected ? "filled" : "default"}
+                            onPress={() => setDraftSyncMode(mode)}
+                            style={[
+                              $optionButton,
+                              isSelected && themed($optionButtonSelected),
+                            ]}
+                            textStyle={isSelected ? themed($optionButtonTextSelected) : undefined}
+                          />
+                        )
+                      })}
+                    </View>
+                    <Text
+                      text={
+                        draftSyncMode === "auto"
+                          ? "Pending points upload in the background when possible."
+                          : "Uploads only happen when you press Upload."
+                      }
+                      size="xs"
+                      style={themed($subtleText)}
+                    />
+                  </View>
+
+                  <View style={themed($settingsSection)}>
+                    <Text text="Power profile" size="xs" weight="medium" style={themed($settingsLabel)} />
+                    <View style={$optionRow}>
+                      {POWER_MODE_OPTIONS.map((mode) => {
+                        const isSelected = draftPowerMode === mode
+                        const baseLabel = mode === "balanced" ? "Balanced" : "Battery saver"
+
+                        return (
+                          <Button
+                            key={mode}
+                            text={baseLabel}
+                            accessibilityState={{ selected: isSelected }}
+                            preset={isSelected ? "filled" : "default"}
+                            onPress={() => setDraftPowerMode(mode)}
+                            style={[
+                              $optionButton,
+                              isSelected && themed($optionButtonSelected),
+                            ]}
+                            textStyle={isSelected ? themed($optionButtonTextSelected) : undefined}
+                          />
+                        )
+                      })}
+                    </View>
+                    <Text
+                      text="Battery saver uses lower accuracy, larger iOS movement thresholds, and allows auto-pause when stationary."
+                      size="xs"
+                      style={themed($subtleText)}
+                    />
+                  </View>
+
+                  {/* Controls */}
+                  <View style={themed($settingsSection)}>
+                    <Text text="Controls" size="xs" weight="medium" style={themed($settingsLabel)} />
+                    <View style={themed($trackingButtons)}>
+                      <Button
+                        text={
+                          tracking && activeTrackingStreamId === streamId
+                            ? "Recording active"
+                            : draftCaptureMode === "manual" && activeTrackingStreamId === streamId
+                              ? "Manual mode ready"
+                              : "Start recording"
+                        }
+                        preset="filled"
+                        onPress={() => {
+                          saveRecordingSettings()
+                          void handleStartTracking({
+                            intervalMinutes: draftIntervalMinutes,
+                            captureMode: draftCaptureMode,
+                            powerMode: draftPowerMode,
+                          })
+                        }}
+                        disabled={
+                          trackingBusy ||
+                          (tracking && activeTrackingStreamId === streamId) ||
+                          (draftCaptureMode === "manual" && activeTrackingStreamId === streamId)
+                        }
+                        style={themed($trackingButton)}
+                      />
+                      <Button
+                        text="Stop session"
+                        preset="default"
+                        onPress={() => {
+                          void handleStopTracking()
+                          closeRecordingSettings()
+                        }}
+                        disabled={trackingBusy || (!tracking && activeTrackingStreamId !== streamId)}
+                        style={themed($trackingButton)}
+                      />
+                      {draftCaptureMode === "manual" ? (
+                        <Button
+                          text="Record point now"
+                          preset="default"
+                          onPress={() => void handleRecordPointNow()}
+                          disabled={trackingBusy}
+                          style={themed($trackingButton)}
+                        />
+                      ) : null}
+                    </View>
+                    <Button
+                      text={uploadBusy ? "Uploading..." : `Upload to stream (${pendingWaypointCount} pending)`}
+                      preset="default"
+                      onPress={() => void handleUploadPendingWaypoints()}
+                      disabled={draftSyncMode === "auto" || uploadBusy || pendingWaypointCount === 0}
+                      style={themed($ctaButton)}
+                    />
+                    {draftSyncMode === "auto" ? (
+                      <Text
+                        text="Auto sync is enabled. Manual upload button is disabled."
+                        size="xs"
+                        style={themed($subtleText)}
+                      />
+                    ) : null}
+                  </View>
+
+                  {/* Interval */}
+                  <View style={themed($settingsSection)}>
+                    <Text text="Recording interval" size="xs" weight="medium" style={themed($settingsLabel)} />
+                    <Text
+                      text="Shorter intervals capture more detail but drain the battery faster."
+                      size="xs"
+                      style={themed($subtleText)}
+                    />
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={$intervalRow}
+                    >
+                      {INTERVAL_OPTIONS.map((opt) => {
+                        const isSelected = draftIntervalMinutes === opt
+                        const baseLabel = opt === 60 ? "1 hour" : `${opt} min`
+
+                        return (
+                          <Button
+                            key={opt}
+                            text={baseLabel}
+                            accessibilityState={{ selected: isSelected }}
+                            preset={isSelected ? "filled" : "default"}
+                            onPress={() => setDraftIntervalMinutes(opt)}
+                            style={[
+                              $intervalButton,
+                              isSelected && themed($optionButtonSelected),
+                            ]}
+                            textStyle={isSelected ? themed($optionButtonTextSelected) : undefined}
+                            disabled={tracking && activeTrackingStreamId === streamId}
+                          />
+                        )
+                      })}
+                    </ScrollView>
+                    {tracking && activeTrackingStreamId === streamId ? (
+                      <Text
+                        text="Stop recording to change the interval."
+                        size="xs"
+                        style={themed($subtleText)}
+                      />
+                    ) : null}
+                  </View>
+                </ScrollView>
+              </View>
+            </View>
+          </Modal>
         </>
       )}
     </Screen>
   )
 }
 
-const $postCard: ViewStyle = {
+const $postCard: ThemedStyle<ViewStyle> = ({ colors, isDark }) => ({
   borderWidth: 1,
-  borderColor: "#D8DEE8",
+  borderColor: isDark ? colors.palette.neutral400 : "#D8DEE8",
   borderRadius: 18,
   padding: 16,
   gap: 10,
-  backgroundColor: "#FFFFFF",
+  backgroundColor: isDark ? colors.palette.neutral100 : "#FFFFFF",
   shadowColor: "#0F172A",
   shadowOffset: { width: 0, height: 8 },
-  shadowOpacity: 0.08,
+  shadowOpacity: isDark ? 0.22 : 0.08,
   shadowRadius: 16,
   elevation: 3,
-}
+})
 
 const $postHeader: ViewStyle = {
   flexDirection: "row",
@@ -1328,14 +1747,14 @@ const $postHeaderLeft: ViewStyle = {
   gap: 8,
 }
 
-const $postText: TextStyle = {
-  color: "#1F2937",
+const $postText: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.text,
   lineHeight: 20,
-}
+})
 
-const $postTimestamp: TextStyle = {
-  color: "#6B7280",
-}
+const $postTimestamp: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.textDim,
+})
 
 const $postFooter: ViewStyle = {
   flexDirection: "row",
@@ -1348,25 +1767,25 @@ const $postImageRow: ViewStyle = {
   paddingTop: 2,
 }
 
-const $postImageTile: ViewStyle = {
+const $postImageTile: ThemedStyle<ViewStyle> = ({ colors, isDark }) => ({
   width: 108,
   height: 132,
   borderRadius: 12,
   overflow: "hidden",
-  backgroundColor: "#F8FAFC",
+  backgroundColor: isDark ? colors.palette.neutral100 : "#F8FAFC",
   borderWidth: 1,
-  borderColor: "#E5E7EB",
-}
+  borderColor: isDark ? colors.palette.neutral400 : "#E5E7EB",
+})
 
-const $postHeroImageFrame: ViewStyle = {
+const $postHeroImageFrame: ThemedStyle<ViewStyle> = ({ colors, isDark }) => ({
   width: "100%",
   height: 320,
   borderRadius: 16,
   overflow: "hidden",
   borderWidth: 1,
-  borderColor: "#E5E7EB",
-  backgroundColor: "#F8FAFC",
-}
+  borderColor: isDark ? colors.palette.neutral400 : "#E5E7EB",
+  backgroundColor: isDark ? colors.palette.neutral100 : "#F8FAFC",
+})
 
 const $postImageTilePressed: ViewStyle = {
   opacity: 0.85,
@@ -1377,29 +1796,29 @@ const $postImage: ImageStyle = {
   height: "100%",
 }
 
-const $postTypePill: ViewStyle = {
+const $postTypePill: ThemedStyle<ViewStyle> = ({ colors, isDark }) => ({
   borderRadius: 999,
   paddingHorizontal: 10,
   paddingVertical: 4,
-  backgroundColor: "#EEF2FF",
-}
+  backgroundColor: isDark ? colors.palette.primary100 : "#EEF2FF",
+})
 
-const $postTypePillText: TextStyle = {
-  color: "#3730A3",
-}
+const $postTypePillText: ThemedStyle<TextStyle> = ({ colors, isDark }) => ({
+  color: isDark ? colors.palette.primary500 : "#3730A3",
+})
 
-const $postMetaChip: ViewStyle = {
+const $postMetaChip: ThemedStyle<ViewStyle> = ({ colors, isDark }) => ({
   borderRadius: 999,
   paddingHorizontal: 10,
   paddingVertical: 5,
   borderWidth: 1,
-  borderColor: "#E5E7EB",
-  backgroundColor: "#F9FAFB",
-}
+  borderColor: isDark ? colors.palette.neutral400 : "#E5E7EB",
+  backgroundColor: isDark ? colors.palette.neutral200 : "#F9FAFB",
+})
 
-const $postMetaChipText: TextStyle = {
-  color: "#4B5563",
-}
+const $postMetaChipText: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.textDim,
+})
 
 const $postImageModalBackdrop: ThemedStyle<ViewStyle> = ({ colors }) => ({
   flex: 1,
@@ -1429,10 +1848,6 @@ const $mapPostModalCard: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
   borderColor: colors.palette.neutral300,
   padding: spacing.md,
   gap: spacing.xs,
-})
-
-const $mapPostModalHeading: ThemedStyle<TextStyle> = ({ colors }) => ({
-  color: colors.text,
 })
 
 const $mapPostModalBody: ThemedStyle<TextStyle> = ({ colors }) => ({
@@ -1575,6 +1990,142 @@ const $trackingButtons: ThemedStyle<ViewStyle> = ({ spacing }) => ({
 const $trackingButton: ThemedStyle<ViewStyle> = () => ({
   flex: 1,
   minHeight: 44,
+})
+
+// ── Recording indicator row ───────────────────────────────────────────────────
+
+const $recordingPanel: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  gap: spacing.xs,
+})
+
+const $recordingRow: ThemedStyle<ViewStyle> = ({ spacing, colors }) => ({
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+  paddingVertical: spacing.xs,
+  paddingHorizontal: spacing.sm,
+  borderRadius: 12,
+  borderWidth: 1,
+  borderColor: colors.palette.neutral300,
+})
+
+const $recordingStatus: ViewStyle = {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 8,
+}
+
+const $recordingDot: ViewStyle = {
+  width: 10,
+  height: 10,
+  borderRadius: 5,
+}
+
+const $recordingDotActive: ViewStyle = {
+  backgroundColor: "#EF4444",
+}
+
+const $recordingDotInactive: ViewStyle = {
+  backgroundColor: "#9CA3AF",
+}
+
+const $recordingActiveText: TextStyle = {
+  color: "#EF4444",
+  fontWeight: "600",
+}
+
+const $recordPointButton: ThemedStyle<ViewStyle> = () => ({
+  minHeight: 44,
+})
+
+// ── Recording settings modal ──────────────────────────────────────────────────
+
+const $settingsModalBackdrop: ThemedStyle<ViewStyle> = ({ colors }) => ({
+  flex: 1,
+  backgroundColor: `${colors.palette.neutral900}80`,
+  justifyContent: "flex-end",
+})
+
+const $settingsModalSheet: ThemedStyle<ViewStyle> = ({ colors, spacing }) => ({
+  backgroundColor: colors.background,
+  borderTopLeftRadius: 24,
+  borderTopRightRadius: 24,
+  maxHeight: "92%",
+  padding: spacing.lg,
+  paddingBottom: spacing.xxl,
+  gap: spacing.md,
+  borderWidth: 1,
+  borderBottomWidth: 0,
+  borderColor: colors.palette.neutral300,
+})
+
+const $settingsModalScroll: ViewStyle = {
+  flexGrow: 0,
+}
+
+const $settingsModalScrollContent: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  gap: spacing.md,
+  paddingBottom: spacing.xs,
+})
+
+const $settingsModalHeader: ThemedStyle<ViewStyle> = () => ({
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+})
+
+const $settingsHeaderActions: ViewStyle = {
+  flexDirection: "row",
+  gap: 8,
+}
+
+const $settingsHeaderButton: ViewStyle = {
+  minHeight: 36,
+  minWidth: 72,
+}
+
+const $settingsSection: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  gap: spacing.sm,
+})
+
+const $settingsLabel: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.text,
+})
+
+const $intervalRow: ViewStyle = {
+  gap: 8,
+  paddingVertical: 2,
+}
+
+const $intervalButton: ViewStyle = {
+  minHeight: 44,
+}
+
+const $optionRow: ViewStyle = {
+  flexDirection: "row",
+  flexWrap: "wrap",
+  gap: 8,
+}
+
+const $optionButton: ViewStyle = {
+  minHeight: 40,
+}
+
+const $optionButtonSelected: ThemedStyle<ViewStyle> = ({ colors }) => ({
+  backgroundColor: colors.tint,
+  borderColor: colors.tint,
+  borderWidth: 2,
+  shadowColor: colors.tint,
+  shadowOpacity: 0.35,
+  shadowRadius: 8,
+  shadowOffset: { width: 0, height: 2 },
+  elevation: 5,
+  transform: [{ translateY: -1 }],
+})
+
+const $optionButtonTextSelected: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.palette.neutral100,
+  fontWeight: "700",
 })
 
 const $section: ThemedStyle<ViewStyle> = ({ spacing }) => ({

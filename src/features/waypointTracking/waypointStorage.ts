@@ -9,7 +9,7 @@
  */
 import { storage } from "@/utils/storage"
 import type { TrackingConfig, Waypoint } from "./waypointTypes"
-import { DEFAULT_INTERVAL_MINUTES } from "./waypointTypes"
+import { DEFAULT_TRACKING_CONFIG } from "./waypointTypes"
 
 const WAYPOINT_IDS_KEY = "waypoint_ids"
 const TRACKING_STREAM_ID_KEY = "tracking_stream_id"
@@ -36,6 +36,17 @@ function normalizeWaypoint(waypoint: Waypoint): Waypoint {
     mileMarker: waypoint.mileMarker ?? null,
     cumulativeVert: waypoint.cumulativeVert ?? null,
     pointIndex: waypoint.pointIndex ?? null,
+  }
+}
+
+function normalizeTrackingConfig(config?: Partial<TrackingConfig> | null): TrackingConfig {
+  return {
+    ...DEFAULT_TRACKING_CONFIG,
+    ...(config ?? {}),
+    intervalMinutes:
+      typeof config?.intervalMinutes === "number" && config.intervalMinutes > 0
+        ? config.intervalMinutes
+        : DEFAULT_TRACKING_CONFIG.intervalMinutes,
   }
 }
 
@@ -105,6 +116,30 @@ export function clearWaypoints(): void {
   storage.delete(WAYPOINT_IDS_KEY)
 }
 
+/**
+ * Delete a subset of waypoints by composite IDs (streamId_timestamp).
+ */
+export function removeWaypointsByIds(idsToRemove: string[]): void {
+  if (idsToRemove.length === 0) return
+
+  const ids = getWaypointIds()
+  const removeSet = new Set(idsToRemove)
+  const remainingIds = ids.filter((id) => !removeSet.has(id))
+
+  ids.forEach((id) => {
+    if (removeSet.has(id)) {
+      storage.delete(`waypoint:${id}`)
+    }
+  })
+
+  if (remainingIds.length === 0) {
+    storage.delete(WAYPOINT_IDS_KEY)
+    return
+  }
+
+  setWaypointIds(remainingIds)
+}
+
 // ─── Stream ID ────────────────────────────────────────────────────────────────
 
 /**
@@ -130,8 +165,13 @@ export function clearActiveStreamId(): void {
 /**
  * Persist tracking configuration (e.g. interval).
  */
-export function saveTrackingConfig(config: TrackingConfig): void {
-  storage.set(TRACKING_CONFIG_KEY, JSON.stringify(config))
+export function saveTrackingConfig(config: Partial<TrackingConfig>): void {
+  const nextConfig = normalizeTrackingConfig({
+    ...loadTrackingConfig(),
+    ...config,
+  })
+
+  storage.set(TRACKING_CONFIG_KEY, JSON.stringify(nextConfig))
 }
 
 /**
@@ -140,8 +180,8 @@ export function saveTrackingConfig(config: TrackingConfig): void {
 export function loadTrackingConfig(): TrackingConfig {
   try {
     const raw = storage.getString(TRACKING_CONFIG_KEY)
-    return raw ? (JSON.parse(raw) as TrackingConfig) : { intervalMinutes: DEFAULT_INTERVAL_MINUTES }
+    return raw ? normalizeTrackingConfig(JSON.parse(raw) as Partial<TrackingConfig>) : DEFAULT_TRACKING_CONFIG
   } catch {
-    return { intervalMinutes: DEFAULT_INTERVAL_MINUTES }
+    return DEFAULT_TRACKING_CONFIG
   }
 }

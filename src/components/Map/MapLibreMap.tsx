@@ -87,6 +87,7 @@ export interface StreamWaypointMarker extends MapCoordinate {
   source?: "public" | "local"
   altitude?: number | null
   mileMarker?: number | null
+  distanceLabel?: string | null
   cumulativeVert?: number | null
   pointIndex?: number | null
 }
