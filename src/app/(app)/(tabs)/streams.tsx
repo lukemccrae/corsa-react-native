@@ -34,7 +34,7 @@ interface CreateStreamForm {
 export const StreamsScreen: FC = function StreamsScreen() {
   const { themed } = useAppTheme()
   const router = useRouter()
-  const { appUser } = useAuth()
+  const { user, appUser } = useAuth()
   const [streams, setStreams] = useState<LiveStream[]>([])
   const [devices, setDevices] = useState<Device[]>([])
   const [loading, setLoading] = useState(true)
@@ -83,8 +83,12 @@ export const StreamsScreen: FC = function StreamsScreen() {
   }, [appUser?.username])
 
   useEffect(() => {
+    if (!user) {
+      router.replace("/(auth)/sign-in")
+      return
+    }
     void loadStreams()
-  }, [loadStreams])
+  }, [loadStreams, router, user])
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true)
@@ -142,7 +146,13 @@ export const StreamsScreen: FC = function StreamsScreen() {
       <Button
         text="Create New Stream"
         preset="filled"
-        onPress={() => setShowCreateForm(true)}
+        onPress={() => {
+          if (!appUser) {
+            router.push("/(auth)/sign-in")
+          } else {
+            setShowCreateForm(true)
+          }
+        }}
         style={themed($createButton)}
       />
 
