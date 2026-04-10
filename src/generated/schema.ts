@@ -567,6 +567,37 @@ export type RecalibrateRouteInput = {
   userId: Scalars['ID']['input'];
 };
 
+/**
+ *   =============================================================
+ *  REST Ingestion Types
+ *  These types are used exclusively by REST API endpoints (not
+ *  AppSync mutations/queries). They are included here so that
+ *  GraphQL Codegen can emit matching TypeScript types for both
+ *  the native app clients and the backend lambdas that service
+ *  these REST endpoints.
+ *  =============================================================
+ *  -- REST: POST /native-waypoint --
+ *  Request body sent by the native app to ingest a single waypoint.
+ */
+export type RestWaypointIngestInput = {
+  lat: Scalars['Float']['input'];
+  lng: Scalars['Float']['input'];
+  streamId: Scalars['ID']['input'];
+  timestamp?: InputMaybe<Scalars['AWSDateTime']['input']>;
+};
+
+/**   Response returned by POST /native-waypoint. */
+export type RestWaypointIngestResponse = {
+  __typename?: 'RestWaypointIngestResponse';
+  cumulativeVert?: Maybe<Scalars['Float']['output']>;
+  mileMarker?: Maybe<Scalars['Float']['output']>;
+  ok: Scalars['Boolean']['output'];
+  pointIndex?: Maybe<Scalars['Int']['output']>;
+  snapped: Scalars['Boolean']['output'];
+  streamId: Scalars['ID']['output'];
+  timestamp: Scalars['AWSDateTime']['output'];
+};
+
 export type Route = {
   __typename?: 'Route';
   createdAt: Scalars['AWSDateTime']['output'];
