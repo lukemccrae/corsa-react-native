@@ -58,6 +58,20 @@ module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
             NSPrivacyAccessedAPITypeReasons: ["CA92.1"], // CA92.1 = "Access info from same app, per documentation"
           },
         ],
+        NSPrivacyCollectedDataTypes: [
+          {
+            NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeEmailAddress",
+            NSPrivacyCollectedDataTypeLinked: true,
+            NSPrivacyCollectedDataTypeTracking: false,
+            NSPrivacyCollectedDataTypePurposes: ["NSPrivacyCollectedDataTypePurposeAppFunctionality"],
+          },
+          {
+            NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeUserID",
+            NSPrivacyCollectedDataTypeLinked: true,
+            NSPrivacyCollectedDataTypeTracking: false,
+            NSPrivacyCollectedDataTypePurposes: ["NSPrivacyCollectedDataTypePurposeAppFunctionality"],
+          },
+        ],
       },
     },
     extra: {
