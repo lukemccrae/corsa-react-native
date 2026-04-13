@@ -2,6 +2,8 @@ import type {
   ChatMessage,
   DeleteDeviceResponse,
   DeleteRouteResponse,
+  DeleteStreamResponse,
+  DeleteUserResponse,
   Device,
   LiveStream,
   Post,
@@ -31,6 +33,14 @@ type RecalibrateRouteResponse = {
 
 type DeleteRouteMutationResponse = {
   deleteRoute?: DeleteRouteResponse | null
+}
+
+type DeleteStreamMutationResponse = {
+  deleteStream?: DeleteStreamResponse | null
+}
+
+type DeleteUserMutationResponse = {
+  deleteUser?: DeleteUserResponse | null
 }
 
 type GetUserByUserIdResponse = {
@@ -731,6 +741,24 @@ const DELETE_ROUTE_MUTATION = `
   }
 `
 
+const DELETE_STREAM_MUTATION = `
+  mutation DeleteStream($input: DeleteStreamInput!) {
+    deleteStream(input: $input) {
+      success
+      message
+    }
+  }
+`
+
+const DELETE_USER_MUTATION = `
+  mutation DeleteUser($input: DeleteUserInput!) {
+    deleteUser(input: $input) {
+      success
+      message
+    }
+  }
+`
+
 async function executeTokenMutation<TData>(
   query: string,
   variables: Record<string, unknown>,
@@ -874,6 +902,29 @@ export async function deleteRoute(
   )
 
   return result.deleteRoute?.success === true
+}
+
+export async function deleteStream(
+  input: { startTime: string; streamId: string },
+  idToken: string,
+): Promise<boolean> {
+  const result = await executeTokenMutation<DeleteStreamMutationResponse>(
+    DELETE_STREAM_MUTATION,
+    { input },
+    idToken,
+  )
+
+  return result.deleteStream?.success === true
+}
+
+export async function deleteUserById(userId: string, idToken: string): Promise<boolean> {
+  const result = await executeTokenMutation<DeleteUserMutationResponse>(
+    DELETE_USER_MUTATION,
+    { input: { userId } },
+    idToken,
+  )
+
+  return result.deleteUser?.success === true
 }
 
 export type RestWaypointIngestInput = {

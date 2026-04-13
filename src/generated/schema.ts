@@ -130,6 +130,16 @@ export type DeleteStreamResponse = {
   success: Scalars['Boolean']['output'];
 };
 
+export type DeleteUserInput = {
+  userId: Scalars['ID']['input'];
+};
+
+export type DeleteUserResponse = {
+  __typename?: 'DeleteUserResponse';
+  message?: Maybe<Scalars['String']['output']>;
+  success: Scalars['Boolean']['output'];
+};
+
 export type DeleteWaypointInput = {
   streamId: Scalars['ID']['input'];
   timestamp: Scalars['AWSDateTime']['input'];
@@ -227,6 +237,8 @@ export type LiveStream = {
   currentLocation?: Maybe<LatLng>;
   currentPointIndex?: Maybe<Scalars['Int']['output']>;
   delayInSeconds?: Maybe<Scalars['Int']['output']>;
+  deleted?: Maybe<Scalars['Boolean']['output']>;
+  deletedAt?: Maybe<Scalars['AWSDateTime']['output']>;
   device?: Maybe<Device>;
   entity?: Maybe<Scalars['String']['output']>;
   finishTime?: Maybe<Scalars['String']['output']>;
@@ -318,6 +330,7 @@ export type Mutation = {
   deleteDevice: DeleteDeviceResponse;
   deleteRoute: DeleteRouteResponse;
   deleteStream: DeleteStreamResponse;
+  deleteUser: DeleteUserResponse;
   deleteWaypoint: DeleteWaypointResponse;
   publishChat: ChatMessage;
   publishWaypoint: Waypoint;
@@ -371,6 +384,11 @@ export type MutationDeleteRouteArgs = {
 
 export type MutationDeleteStreamArgs = {
   input: DeleteStreamInput;
+};
+
+
+export type MutationDeleteUserArgs = {
+  input: DeleteUserInput;
 };
 
 
@@ -701,6 +719,8 @@ export type User = {
   __typename?: 'User';
   bio?: Maybe<Scalars['String']['output']>;
   coverImagePath?: Maybe<Scalars['String']['output']>;
+  deleted?: Maybe<Scalars['Boolean']['output']>;
+  deletedAt?: Maybe<Scalars['AWSDateTime']['output']>;
   devices?: Maybe<Array<Maybe<Device>>>;
   live?: Maybe<Scalars['Boolean']['output']>;
   liveStreams?: Maybe<Array<Maybe<LiveStream>>>;
