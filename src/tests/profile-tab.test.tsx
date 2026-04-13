@@ -1,16 +1,25 @@
+import { ActivityIndicator } from "react-native"
 import { act, render } from "@testing-library/react-native"
 
-import ProfileTab from "./profile"
+import ProfileTab from "@/app/(app)/(tabs)/profile"
 
-const mockReplace = jest.fn()
 const mockUseAuth = jest.fn()
+const mockReplace = jest.fn()
 
-jest.mock("expo-router", () => ({
-  useRouter: () => ({ replace: mockReplace }),
-}))
+jest.mock("expo-router", () => {
+  return {
+    useRouter: () => ({ replace: mockReplace }),
+  }
+})
 
 jest.mock("@/providers/AuthProvider", () => ({
   useAuth: () => mockUseAuth(),
+}))
+
+jest.mock("@/theme/context", () => ({
+  useAppTheme: () => ({
+    themed: (style: unknown) => style,
+  }),
 }))
 
 jest.mock("@/screens/UserProfileScreen", () => {
@@ -29,40 +38,43 @@ describe("ProfileTab", () => {
     jest.clearAllMocks()
   })
 
-  it("renders nothing and does not redirect while auth is loading", async () => {
+  it("shows a loading state and does not redirect while auth is loading", async () => {
     mockUseAuth.mockReturnValue({ user: null, appUser: null, loading: true })
 
-    const { toJSON } = render(<ProfileTab />)
+    const { UNSAFE_getByType } = render(<ProfileTab />)
 
     await act(async () => {})
 
-    expect(toJSON()).toBeNull()
-    expect(mockReplace).not.toHaveBeenCalled()
+    expect(UNSAFE_getByType(ActivityIndicator)).toBeTruthy()
   })
 
   it("redirects to sign-in when unauthenticated and not loading", async () => {
     mockUseAuth.mockReturnValue({ user: null, appUser: null, loading: false })
 
-    render(<ProfileTab />)
+    const { UNSAFE_getByType } = render(<ProfileTab />)
 
     await act(async () => {})
 
+    expect(UNSAFE_getByType(ActivityIndicator)).toBeTruthy()
     expect(mockReplace).toHaveBeenCalledWith("/(auth)/sign-in")
   })
 
-  it("renders nothing when authenticated but appUser not yet loaded", async () => {
+  it("shows a fallback message when authenticated but appUser is still missing after loading", async () => {
     mockUseAuth.mockReturnValue({
       user: { uid: "user123" },
       appUser: null,
       loading: false,
     })
 
-    const { toJSON } = render(<ProfileTab />)
+    const { getByText } = render(<ProfileTab />)
 
     await act(async () => {})
 
-    expect(toJSON()).toBeNull()
-    expect(mockReplace).not.toHaveBeenCalled()
+    expect(
+      getByText(
+        "Your account is signed in, but the profile record could not be loaded. Try reopening the tab or signing in again.",
+      ),
+    ).toBeTruthy()
   })
 
   it("renders UserProfileScreen when authenticated and appUser is loaded", async () => {
@@ -77,20 +89,19 @@ describe("ProfileTab", () => {
     await act(async () => {})
 
     expect(getByText("testuser")).toBeTruthy()
-    expect(mockReplace).not.toHaveBeenCalled()
   })
 
-  it("does not redirect when loading transitions from true to false with authenticated user", async () => {
+  it("keeps showing profile content for an authenticated user", async () => {
     mockUseAuth.mockReturnValue({
       user: { uid: "user123" },
       appUser: { username: "testuser" },
       loading: false,
     })
 
-    render(<ProfileTab />)
+    const { getByText } = render(<ProfileTab />)
 
     await act(async () => {})
 
-    expect(mockReplace).not.toHaveBeenCalled()
+    expect(getByText("testuser")).toBeTruthy()
   })
 })

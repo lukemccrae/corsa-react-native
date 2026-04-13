@@ -52,7 +52,7 @@
     "expo-linking": "~55.0.7",
     "expo-localization": "~55.0.8",
     "expo-location": "^55.1.3",
-    "expo-router": "~55.0.4",
+    "expo-router": "~55.0.12",
     "expo-splash-screen": "~55.0.10",
     "expo-system-ui": "~55.0.9",
     "expo-task-manager": "~55.0.12",

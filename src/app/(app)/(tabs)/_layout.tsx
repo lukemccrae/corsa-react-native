@@ -1,7 +1,37 @@
 import { Tabs } from "expo-router"
 import { Ionicons } from "@expo/vector-icons"
+import { Image, View } from "react-native"
 
+import { useAuth } from "@/providers/AuthProvider"
 import { useAppTheme } from "@/theme/context"
+
+function ProfileTabIcon({ color, size }: { color: string; size: number }) {
+  const { appUser } = useAuth()
+
+  if (appUser?.profilePicture) {
+    return (
+      <View
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          overflow: "hidden",
+          borderWidth: 1,
+          borderColor: color,
+        }}
+      >
+        <Image
+          source={{ uri: appUser.profilePicture }}
+          style={{ width: "100%", height: "100%" }}
+          resizeMode="cover"
+          testID="profile-tab-avatar"
+        />
+      </View>
+    )
+  }
+
+  return <Ionicons testID="profile-tab-icon-fallback" name="person-outline" size={size} color={color} />
+}
 
 export default function AppTabsLayout() {
   const {
@@ -42,9 +72,7 @@ export default function AppTabsLayout() {
         name="profile"
         options={{
           title: "Profile",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-outline" size={size} color={color} />
-          ),
+          tabBarIcon: ({ color, size }) => <ProfileTabIcon color={color} size={size} />,
         }}
       />
       <Tabs.Screen name="routes" options={{ href: null }} />

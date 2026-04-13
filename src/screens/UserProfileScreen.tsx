@@ -168,6 +168,13 @@ export const UserProfileScreen: FC<UserProfileScreenProps> = function UserProfil
 
   const loadProfile = useCallback(
     async (isRefresh = false) => {
+      if (__DEV__) {
+        console.log("[UserProfileScreen] loadProfile start", {
+          username,
+          isRefresh,
+        })
+      }
+
       if (isRefresh) {
         setRefreshing(true)
       } else {
@@ -176,11 +183,31 @@ export const UserProfileScreen: FC<UserProfileScreenProps> = function UserProfil
 
       try {
         const result = await fetchUserProfileByUsername(username)
+        if (__DEV__) {
+          console.log("[UserProfileScreen] loadProfile success", {
+            username,
+            fetchedUsername: result?.username ?? null,
+            liveStreamCount: result?.liveStreams?.length ?? 0,
+            routeCount: result?.routes?.length ?? 0,
+          })
+        }
         setProfileUser(result)
         setError(null)
       } catch (loadError) {
+        if (__DEV__) {
+          console.warn("[UserProfileScreen] loadProfile failed", {
+            username,
+            loadError,
+          })
+        }
         setError(loadError instanceof Error ? loadError.message : "Failed to load profile")
       } finally {
+        if (__DEV__) {
+          console.log("[UserProfileScreen] loadProfile finished", {
+            username,
+            isRefresh,
+          })
+        }
         setLoading(false)
         setRefreshing(false)
       }
@@ -189,8 +216,14 @@ export const UserProfileScreen: FC<UserProfileScreenProps> = function UserProfil
   )
 
   useEffect(() => {
+    if (__DEV__) {
+      console.log("[UserProfileScreen] mounted", {
+        username,
+        signedInUsername: appUser?.username ?? null,
+      })
+    }
     void loadProfile()
-  }, [loadProfile])
+  }, [appUser?.username, loadProfile, username])
 
   const isOwnProfile = appUser?.username === username
   const liveStreams = useMemo(
@@ -206,9 +239,9 @@ export const UserProfileScreen: FC<UserProfileScreenProps> = function UserProfil
     <Screen
       preset="scroll"
       contentContainerStyle={themed($container)}
-      accessibilityLabel={translate("userProfileScreen:viewProfile", { username })}
       ScrollViewProps={{
         refreshControl: <RefreshControl refreshing={refreshing} onRefresh={() => void loadProfile(true)} />,
+        accessibilityLabel: translate("userProfileScreen:viewProfile", { username }),
       }}
     >
       <View style={themed($hero)}>

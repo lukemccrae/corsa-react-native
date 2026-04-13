@@ -23,6 +23,10 @@ type UpsertDeviceResponse = {
   upsertDevice?: Device | null
 }
 
+type UpsertUserResponse = {
+  upsertUser?: User | null
+}
+
 type DeleteDeviceMutationResponse = {
   deleteDevice?: DeleteDeviceResponse | null
 }
@@ -701,6 +705,14 @@ const UPSERT_DEVICE_MUTATION = `
   }
 `
 
+const UPSERT_USER_MUTATION = `
+  mutation UpsertUser($input: UserInput!) {
+    upsertUser(input: $input) {
+      ${USER_PROFILE_FIELDS}
+    }
+  }
+`
+
 const DELETE_DEVICE_MUTATION = `
   mutation DeleteDevice($input: DeleteDeviceInput!) {
     deleteDevice(input: $input) {
@@ -828,6 +840,39 @@ export type UpsertDeviceInput = {
   make: string
   model?: string | null
   shareUrl?: string | null
+}
+
+export type UpsertUserInput = {
+  userId: string
+  username: string
+  profilePicture: string
+  bio?: string | null
+  live?: boolean
+  streamId?: string | null
+}
+
+export async function upsertUser(input: UpsertUserInput, idToken: string): Promise<User> {
+  const result = await executeTokenMutation<UpsertUserResponse>(
+    UPSERT_USER_MUTATION,
+    {
+      input: {
+        userId: input.userId,
+        username: input.username,
+        profilePicture: input.profilePicture,
+        bio: input.bio ?? undefined,
+        live: input.live,
+        streamId: input.streamId ?? undefined,
+      },
+    },
+    idToken,
+  )
+
+  const user = normalizeUserImagePaths(result.upsertUser ?? null)
+  if (!user) {
+    throw new Error("upsertUser returned no data")
+  }
+
+  return user
 }
 
 export async function upsertDevice(input: UpsertDeviceInput, idToken: string): Promise<Device> {
