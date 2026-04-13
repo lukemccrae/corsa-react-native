@@ -29,10 +29,12 @@ describe("ProfileTab", () => {
     jest.clearAllMocks()
   })
 
-  it("renders nothing while auth is loading", () => {
+  it("renders nothing and does not redirect while auth is loading", async () => {
     mockUseAuth.mockReturnValue({ user: null, appUser: null, loading: true })
 
     const { toJSON } = render(<ProfileTab />)
+
+    await act(async () => {})
 
     expect(toJSON()).toBeNull()
     expect(mockReplace).not.toHaveBeenCalled()
@@ -78,8 +80,12 @@ describe("ProfileTab", () => {
     expect(mockReplace).not.toHaveBeenCalled()
   })
 
-  it("does not redirect when still loading even if user is null", async () => {
-    mockUseAuth.mockReturnValue({ user: null, appUser: null, loading: true })
+  it("does not redirect when loading transitions from true to false with authenticated user", async () => {
+    mockUseAuth.mockReturnValue({
+      user: { uid: "user123" },
+      appUser: { username: "testuser" },
+      loading: false,
+    })
 
     render(<ProfileTab />)
 
