@@ -1211,6 +1211,15 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
             ) : null}
 
             {isOwnStream ? (
+              <Button
+                text="Stream settings"
+                preset="default"
+                onPress={() => router.push(`/(app)/user/${username}/stream/${stream.streamId}/settings`)}
+                style={themed($ctaButton)}
+              />
+            ) : null}
+
+            {isOwnStream ? (
               <View style={themed($recordingPanel)}>
                 <View style={themed($recordingRow)}>
                   <View style={$recordingStatus}>

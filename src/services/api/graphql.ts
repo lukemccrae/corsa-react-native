@@ -6,8 +6,11 @@ import type {
   DeleteUserResponse,
   Device,
   LiveStream,
+  LiveStreamInput,
+  LiveStreamSuccessResponse,
   Post,
   Route,
+  Sponsor,
   User,
 } from "@/generated/schema"
 
@@ -25,6 +28,10 @@ type UpsertDeviceResponse = {
 
 type UpsertUserResponse = {
   upsertUser?: User | null
+}
+
+type UpsertLiveStreamResponse = {
+  upsertLiveStream?: LiveStreamSuccessResponse | null
 }
 
 type DeleteDeviceMutationResponse = {
@@ -130,6 +137,10 @@ const USER_PROFILE_FIELDS = `
     status
     lastSeenAt
     verifiedAt
+    lastLocation {
+      lat
+      lng
+    }
   }
   liveStreams {
     streamId
@@ -138,12 +149,22 @@ const USER_PROFILE_FIELDS = `
     finishTime
     live
     published
+    delayInSeconds
     mileMarker
     timezone
+    slug
     unitOfMeasure
     currentLocation {
       lat
       lng
+    }
+    sponsors {
+      name
+      link
+      image
+    }
+    device {
+      deviceId
     }
     publicUser {
       profilePicture
@@ -713,6 +734,15 @@ const UPSERT_USER_MUTATION = `
   }
 `
 
+const UPSERT_LIVE_STREAM_MUTATION = `
+  mutation UpsertLiveStream($input: LiveStreamInput!) {
+    upsertLiveStream(input: $input) {
+      success
+      message
+    }
+  }
+`
+
 const DELETE_DEVICE_MUTATION = `
   mutation DeleteDevice($input: DeleteDeviceInput!) {
     deleteDevice(input: $input) {
@@ -867,12 +897,45 @@ export async function upsertUser(input: UpsertUserInput, idToken: string): Promi
     idToken,
   )
 
-  const user = normalizeUserImagePaths(result.upsertUser ?? null)
+  const user = result.upsertUser ? normalizeUserImagePaths(result.upsertUser) : null
   if (!user) {
     throw new Error("upsertUser returned no data")
   }
 
   return user
+}
+
+export type UpsertLiveStreamInput = LiveStreamInput & {
+  sponsors?: Array<Sponsor | null> | null
+}
+
+export async function upsertLiveStream(
+  input: UpsertLiveStreamInput,
+  idToken: string,
+): Promise<LiveStreamSuccessResponse> {
+  const result = await executeTokenMutation<UpsertLiveStreamResponse>(
+    UPSERT_LIVE_STREAM_MUTATION,
+    {
+      input: {
+        ...input,
+        sponsors:
+          input.sponsors
+            ?.filter((sponsor): sponsor is Sponsor => Boolean(sponsor))
+            .map((sponsor) => ({
+              image: sponsor.image,
+              link: sponsor.link,
+              name: sponsor.name,
+            })) ?? undefined,
+      },
+    },
+    idToken,
+  )
+
+  if (!result.upsertLiveStream) {
+    throw new Error("upsertLiveStream returned no data")
+  }
+
+  return result.upsertLiveStream
 }
 
 export async function upsertDevice(input: UpsertDeviceInput, idToken: string): Promise<Device> {
