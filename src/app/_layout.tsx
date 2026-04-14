@@ -12,7 +12,7 @@ import { loadDateFnsLocale } from "@/utils/formatDate"
 
 // Register the background location task as early as possible so the OS can
 // deliver location events even before any tracking screen is mounted.
-import "@/features/waypointTracking/locationTask"
+// import "@/features/waypointTracking/locationTask"
 
 SplashScreen.preventAutoHideAsync()
 
