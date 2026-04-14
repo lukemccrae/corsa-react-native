@@ -22,6 +22,10 @@ export const storage: MMKV = new Proxy({} as MMKV, {
     const val = (instance as unknown as Record<string | symbol, unknown>)[prop]
     return typeof val === "function" ? (val as (...args: unknown[]) => unknown).bind(instance) : val
   },
+  set(_target, prop: string | symbol, value: unknown) {
+    ;(getStorage() as unknown as Record<string | symbol, unknown>)[prop] = value
+    return true
+  },
 })
 
 /**
