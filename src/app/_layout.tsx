@@ -4,6 +4,7 @@ import { useFonts } from "@expo-google-fonts/space-grotesk"
 import { KeyboardProvider } from "react-native-keyboard-controller"
 import { initialWindowMetrics, SafeAreaProvider } from "react-native-safe-area-context"
 
+import { registerTrackingTaskIfNeeded } from "@/features/waypointTracking/locationTask"
 import { initI18n } from "@/i18n"
 import { AuthProvider } from "@/providers/AuthProvider"
 import { ThemeProvider } from "@/theme/context"

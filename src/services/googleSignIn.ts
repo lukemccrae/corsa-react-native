@@ -52,13 +52,17 @@ export function useGoogleSignIn() {
   const nativeRedirectUri = nativeClientId
     ? reverseClientIdRedirectUri(nativeClientId)
     : undefined
+  const configurationError =
+    (Platform.OS === "ios" || Platform.OS === "android") && !nativeClientId
+      ? new Error(
+          `Google sign-in misconfigured: missing ${Platform.OS} client ID. Set EXPO_PUBLIC_GOOGLE_${
+            Platform.OS === "ios" ? "IOS" : "ANDROID"
+          }_CLIENT_ID in .env and rebuild the app.`,
+        )
+      : null
 
-  if ((Platform.OS === "ios" || Platform.OS === "android") && !nativeClientId) {
-    throw new Error(
-      `Google sign-in misconfigured: missing ${Platform.OS} client ID. Set EXPO_PUBLIC_GOOGLE_${
-        Platform.OS === "ios" ? "IOS" : "ANDROID"
-      }_CLIENT_ID in .env and rebuild the app.`,
-    )
+  if (configurationError) {
+    console.error(configurationError.message)
   }
 
   // Force a stable native redirect URI that matches the native OAuth client.
@@ -74,6 +78,10 @@ export function useGoogleSignIn() {
   })
 
   const signInWithGoogle = async (): Promise<void> => {
+    if (configurationError) {
+      throw configurationError
+    }
+
     const result = await promptAsync()
 
     console.log("Google OAuth result:", result)

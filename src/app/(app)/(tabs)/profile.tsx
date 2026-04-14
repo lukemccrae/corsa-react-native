@@ -59,7 +59,7 @@ export default function ProfileTab() {
     return (
       <View style={themed($loadingContainer)}>
         <Text
-          text="Your account is signed in, but the profile record could not be loaded. Try reopening the tab or signing in again."
+          text="Your account is signed in, but the profile record could not be loaded. Try reopening the app or signing in again."
           size="sm"
           style={themed($messageText)}
         />
