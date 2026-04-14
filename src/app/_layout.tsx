@@ -9,10 +9,7 @@ import { AuthProvider } from "@/providers/AuthProvider"
 import { ThemeProvider } from "@/theme/context"
 import { customFontsToLoad } from "@/theme/typography"
 import { loadDateFnsLocale } from "@/utils/formatDate"
-
-// Register the background location task as early as possible so the OS can
-// deliver location events even before any tracking screen is mounted.
-import "@/features/waypointTracking/locationTask"
+import { registerTrackingTaskIfNeeded } from "@/features/waypointTracking/locationTask"
 
 SplashScreen.preventAutoHideAsync()
 
@@ -26,6 +23,14 @@ if (__DEV__) {
 export default function Root() {
   const [fontsLoaded, fontError] = useFonts(customFontsToLoad)
   const [isI18nInitialized, setIsI18nInitialized] = useState(false)
+
+  useEffect(() => {
+    // Defer native TaskManager registration to avoid executing native code at
+    // module import time, which can cause a SIGABRT in TestFlight release builds.
+    registerTrackingTaskIfNeeded().catch((e) =>
+      console.warn("[WaypointTracking] registration failed", e),
+    )
+  }, [])
 
   useEffect(() => {
     initI18n()

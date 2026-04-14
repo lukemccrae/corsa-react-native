@@ -2,8 +2,11 @@
  * Background location task registration and start/stop helpers.
  *
  * The task MUST be defined (via TaskManager.defineTask) before the app can be
- * suspended.  Import this module in the root layout to ensure early
- * registration.
+ * suspended. Call registerTrackingTaskIfNeeded() from a useEffect in the root
+ * layout rather than executing at import time – this avoids running native
+ * TaskManager code synchronously during module evaluation, which can trigger
+ * an ObjC exception rethrow (SIGABRT) in TestFlight / release builds before
+ * the React Native runtime is fully initialised.
  */
 import { Platform } from "react-native"
 import * as Location from "expo-location"
@@ -72,7 +75,23 @@ async function captureCurrentWaypoint(
 
 // ─── Task definition ──────────────────────────────────────────────────────────
 
-if (!TaskManager.isTaskDefined(TRACKING_TASK_NAME)) {
+/**
+ * Register the background location task if it has not already been defined.
+ *
+ * This is intentionally NOT called at module scope. Calling TaskManager APIs
+ * synchronously during module evaluation can fire native code before the RN
+ * runtime is ready, producing an ObjC exception rethrow (SIGABRT) in
+ * TestFlight / release builds. Call this from a useEffect in the root layout
+ * instead.
+ */
+export async function registerTrackingTaskIfNeeded(): Promise<void> {
+  if (Platform.OS === "web") return
+
+  const available = await TaskManager.isAvailableAsync()
+  if (!available) return
+
+  if (TaskManager.isTaskDefined(TRACKING_TASK_NAME)) return
+
   TaskManager.defineTask(TRACKING_TASK_NAME, async ({ data, error }) => {
     if (error) {
       console.warn("[WaypointTracking] task error", error)
