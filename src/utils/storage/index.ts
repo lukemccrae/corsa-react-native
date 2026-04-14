@@ -1,6 +1,28 @@
 import { MMKV } from "react-native-mmkv"
 
-export const storage = new MMKV()
+let _storage: MMKV | null = null
+
+/** Returns (or lazily creates) the shared MMKV instance. */
+function getStorage(): MMKV {
+  if (!_storage) {
+    _storage = new MMKV()
+  }
+  return _storage
+}
+
+/**
+ * Lazy MMKV storage proxy – the native MMKV instance is not constructed until
+ * the first property access. This avoids initialising the native module at
+ * import time, which can cause a SIGABRT in TestFlight / release builds before
+ * the React Native runtime is fully ready.
+ */
+export const storage: MMKV = new Proxy({} as MMKV, {
+  get(_target, prop: string | symbol) {
+    const instance = getStorage()
+    const val = (instance as unknown as Record<string | symbol, unknown>)[prop]
+    return typeof val === "function" ? (val as (...args: unknown[]) => unknown).bind(instance) : val
+  },
+})
 
 /**
  * Loads a string from storage.
