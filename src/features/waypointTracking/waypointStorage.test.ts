@@ -1,4 +1,4 @@
-import { storage } from "@/utils/storage"
+import { getStorage } from "@/utils/storage"
 import {
   appendWaypoint,
   clearWaypoints,
@@ -29,7 +29,7 @@ const makeWaypoint = (overrides: Partial<Waypoint> = {}): Waypoint => ({
 
 describe("waypointStorage", () => {
   beforeEach(() => {
-    storage.clearAll()
+    getStorage().clearAll()
   })
 
   // ─── appendWaypoint / getWaypointCount ─────────────────────────────────────

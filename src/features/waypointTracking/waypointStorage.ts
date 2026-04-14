@@ -7,7 +7,7 @@
  *   tracking_stream_id  → active streamId (UUID string)
  *   tracking_config     → JSON-serialised TrackingConfig
  */
-import { storage } from "@/utils/storage"
+import { getStorage } from "@/utils/storage"
 import type { TrackingConfig, Waypoint } from "./waypointTypes"
 import { DEFAULT_TRACKING_CONFIG } from "./waypointTypes"
 
@@ -19,7 +19,7 @@ const TRACKING_CONFIG_KEY = "tracking_config"
 
 function getWaypointIds(): string[] {
   try {
-    const raw = storage.getString(WAYPOINT_IDS_KEY)
+    const raw = getStorage().getString(WAYPOINT_IDS_KEY)
     return raw ? (JSON.parse(raw) as string[]) : []
   } catch {
     return []
@@ -27,7 +27,7 @@ function getWaypointIds(): string[] {
 }
 
 function setWaypointIds(ids: string[]): void {
-  storage.set(WAYPOINT_IDS_KEY, JSON.stringify(ids))
+  getStorage().set(WAYPOINT_IDS_KEY, JSON.stringify(ids))
 }
 
 function normalizeWaypoint(waypoint: Waypoint): Waypoint {
@@ -59,7 +59,7 @@ function normalizeTrackingConfig(config?: Partial<TrackingConfig> | null): Track
 export function appendWaypoint(waypoint: Waypoint): void {
   const normalized = normalizeWaypoint(waypoint)
   const id = `${normalized.streamId}_${normalized.timestamp}`
-  storage.set(`waypoint:${id}`, JSON.stringify(normalized))
+  getStorage().set(`waypoint:${id}`, JSON.stringify(normalized))
   const ids = getWaypointIds()
   if (!ids.includes(id)) {
     ids.push(id)
@@ -84,7 +84,7 @@ export function appendWaypoint(waypoint: Waypoint): void {
  */
 export function getWaypoint(id: string): Waypoint | null {
   try {
-    const raw = storage.getString(`waypoint:${id}`)
+    const raw = getStorage().getString(`waypoint:${id}`)
     return raw ? normalizeWaypoint(JSON.parse(raw) as Waypoint) : null
   } catch {
     return null
@@ -112,8 +112,8 @@ export function getWaypointCount(): number {
  */
 export function clearWaypoints(): void {
   const ids = getWaypointIds()
-  ids.forEach((id) => storage.delete(`waypoint:${id}`))
-  storage.delete(WAYPOINT_IDS_KEY)
+  ids.forEach((id) => getStorage().delete(`waypoint:${id}`))
+  getStorage().delete(WAYPOINT_IDS_KEY)
 }
 
 /**
@@ -128,12 +128,12 @@ export function removeWaypointsByIds(idsToRemove: string[]): void {
 
   ids.forEach((id) => {
     if (removeSet.has(id)) {
-      storage.delete(`waypoint:${id}`)
+      getStorage().delete(`waypoint:${id}`)
     }
   })
 
   if (remainingIds.length === 0) {
-    storage.delete(WAYPOINT_IDS_KEY)
+    getStorage().delete(WAYPOINT_IDS_KEY)
     return
   }
 
@@ -146,18 +146,18 @@ export function removeWaypointsByIds(idsToRemove: string[]): void {
  * Persist the active stream ID so background tasks can reference it.
  */
 export function setActiveStreamId(streamId: string): void {
-  storage.set(TRACKING_STREAM_ID_KEY, streamId)
+  getStorage().set(TRACKING_STREAM_ID_KEY, streamId)
 }
 
 /**
  * Retrieve the active stream ID, or null if tracking has never started.
  */
 export function getActiveStreamId(): string | null {
-  return storage.getString(TRACKING_STREAM_ID_KEY) ?? null
+  return getStorage().getString(TRACKING_STREAM_ID_KEY) ?? null
 }
 
 export function clearActiveStreamId(): void {
-  storage.delete(TRACKING_STREAM_ID_KEY)
+  getStorage().delete(TRACKING_STREAM_ID_KEY)
 }
 
 // ─── Tracking config ──────────────────────────────────────────────────────────
@@ -171,7 +171,7 @@ export function saveTrackingConfig(config: Partial<TrackingConfig>): void {
     ...config,
   })
 
-  storage.set(TRACKING_CONFIG_KEY, JSON.stringify(nextConfig))
+  getStorage().set(TRACKING_CONFIG_KEY, JSON.stringify(nextConfig))
 }
 
 /**
@@ -179,7 +179,7 @@ export function saveTrackingConfig(config: Partial<TrackingConfig>): void {
  */
 export function loadTrackingConfig(): TrackingConfig {
   try {
-    const raw = storage.getString(TRACKING_CONFIG_KEY)
+    const raw = getStorage().getString(TRACKING_CONFIG_KEY)
     return raw ? normalizeTrackingConfig(JSON.parse(raw) as Partial<TrackingConfig>) : DEFAULT_TRACKING_CONFIG
   } catch {
     return DEFAULT_TRACKING_CONFIG

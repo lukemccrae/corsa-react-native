@@ -9,10 +9,7 @@ import { AuthProvider } from "@/providers/AuthProvider"
 import { ThemeProvider } from "@/theme/context"
 import { customFontsToLoad } from "@/theme/typography"
 import { loadDateFnsLocale } from "@/utils/formatDate"
-
-// Register the background location task as early as possible so the OS can
-// deliver location events even before any tracking screen is mounted.
-import "@/features/waypointTracking/locationTask"
+import { registerTrackingTaskIfNeeded } from "@/features/waypointTracking/locationTask"
 
 SplashScreen.preventAutoHideAsync()
 
@@ -31,6 +28,15 @@ export default function Root() {
     initI18n()
       .then(() => setIsI18nInitialized(true))
       .then(() => loadDateFnsLocale())
+  }, [])
+
+  useEffect(() => {
+    // Register the background location task after the native bridge is ready.
+    // Calling TaskManager APIs at module scope can trigger ObjCTurboModule
+    // exceptions before the bridge initialises, causing SIGABRT on TestFlight.
+    registerTrackingTaskIfNeeded().catch((err) => {
+      console.warn("[Layout] registerTrackingTaskIfNeeded failed", err)
+    })
   }, [])
 
   const loaded = fontsLoaded && isI18nInitialized

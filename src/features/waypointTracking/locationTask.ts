@@ -1,9 +1,11 @@
 /**
  * Background location task registration and start/stop helpers.
  *
- * The task MUST be defined (via TaskManager.defineTask) before the app can be
- * suspended.  Import this module in the root layout to ensure early
- * registration.
+ * Call registerTrackingTaskIfNeeded() from the root layout's useEffect to
+ * register the background task after the native bridge is ready.  Defining
+ * the task at module-import time (i.e. at the top level) can trigger native
+ * ObjCTurboModule calls before the bridge is initialised, causing a SIGABRT
+ * crash on TestFlight.
  */
 import { Platform } from "react-native"
 import * as Location from "expo-location"
@@ -70,33 +72,48 @@ async function captureCurrentWaypoint(
   return waypoint
 }
 
-// ─── Task definition ──────────────────────────────────────────────────────────
+// ─── Task registration ────────────────────────────────────────────────────────
 
-if (!TaskManager.isTaskDefined(TRACKING_TASK_NAME)) {
-  TaskManager.defineTask(TRACKING_TASK_NAME, async ({ data, error }) => {
-    if (error) {
-      console.warn("[WaypointTracking] task error", error)
-      return
-    }
+/**
+ * Register the background location task with the OS if it hasn't been
+ * registered yet.
+ *
+ * This MUST be called from a useEffect (i.e. after the native bridge is
+ * fully initialised) rather than at module scope.  Calling TaskManager APIs
+ * synchronously during JS module evaluation causes ObjCTurboModule to throw
+ * before the bridge is ready, resulting in a SIGABRT crash on TestFlight.
+ */
+export async function registerTrackingTaskIfNeeded(): Promise<void> {
+  // TaskManager is not available on web or in Expo Go.
+  if (Platform.OS === "web") return
+  if (!(await TaskManager.isAvailableAsync())) return
 
-    const streamId = getActiveStreamId()
-    if (!streamId) return
-
-    const { locations } = data as { locations: Location.LocationObject[] }
-    locations.forEach((loc) => {
-      const waypoint: Waypoint = {
-        streamId,
-        lat: loc.coords.latitude,
-        lng: loc.coords.longitude,
-        altitude: loc.coords.altitude ?? null,
-        timestamp: loc.timestamp,
-        cumulativeVert: null,
-        mileMarker: null,
-        pointIndex: null,
+  if (!TaskManager.isTaskDefined(TRACKING_TASK_NAME)) {
+    TaskManager.defineTask(TRACKING_TASK_NAME, async ({ data, error }) => {
+      if (error) {
+        console.warn("[WaypointTracking] task error", error)
+        return
       }
-      appendWaypoint(waypoint)
+
+      const streamId = getActiveStreamId()
+      if (!streamId) return
+
+      const { locations } = data as { locations: Location.LocationObject[] }
+      locations.forEach((loc) => {
+        const waypoint: Waypoint = {
+          streamId,
+          lat: loc.coords.latitude,
+          lng: loc.coords.longitude,
+          altitude: loc.coords.altitude ?? null,
+          timestamp: loc.timestamp,
+          cumulativeVert: null,
+          mileMarker: null,
+          pointIndex: null,
+        }
+        appendWaypoint(waypoint)
+      })
     })
-  })
+  }
 }
 
 // ─── Permission helpers ───────────────────────────────────────────────────────

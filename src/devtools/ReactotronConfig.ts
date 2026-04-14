@@ -9,7 +9,7 @@ import { ArgType } from "reactotron-core-client"
 import { ReactotronReactNative } from "reactotron-react-native"
 import mmkvPlugin from "reactotron-react-native-mmkv"
 
-import { storage } from "@/utils/storage"
+import { getStorage } from "@/utils/storage"
 
 import { Reactotron } from "./ReactotronClient"
 
@@ -21,7 +21,7 @@ const reactotron = Reactotron.configure({
   },
 })
 
-reactotron.use(mmkvPlugin<ReactotronReactNative>({ storage }))
+reactotron.use(mmkvPlugin<ReactotronReactNative>({ storage: getStorage() }))
 
 if (Platform.OS !== "web") {
   reactotron.useReactNative({
