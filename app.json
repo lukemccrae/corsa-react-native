@@ -1,5 +1,5 @@
 {
-  "name": "CorsaNative",
+  "name": "Corsa",
   "slug": "CorsaNative",
   "scheme": "corsanative",
   "version": "1.0.16",
@@ -79,10 +79,10 @@
     [
       "expo-splash-screen",
       {
-        "image": "./assets/images/app-icon-all.png",
+        "image": "./assets/images/splash-corsa.png",
         "imageWidth": 300,
         "resizeMode": "contain",
-        "backgroundColor": "#191015"
+        "backgroundColor": "#FFFFFF"
       }
     ],
     [
