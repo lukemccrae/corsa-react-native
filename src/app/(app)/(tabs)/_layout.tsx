@@ -82,6 +82,7 @@ export default function AppTabsLayout() {
       <Tabs.Screen name="user" options={{ href: null }} />
       <Tabs.Screen name="user/[username]" options={{ href: null }} />
       <Tabs.Screen name="user/[username]/stream/[streamId]" options={{ href: null }} />
+      <Tabs.Screen name="user/[username]/stream/[streamId]/settings" options={{ href: null }} />
       <Tabs.Screen name="user/[username]/route/[routeId]" options={{ href: null }} />
     </Tabs>
   )
