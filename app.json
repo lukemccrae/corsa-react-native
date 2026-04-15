@@ -2,7 +2,7 @@
   "name": "CorsaNative",
   "slug": "CorsaNative",
   "scheme": "corsanative",
-  "version": "1.0.14",
+  "version": "1.0.16",
   "orientation": "portrait",
   "userInterfaceStyle": "automatic",
   "icon": "./assets/images/app-icon-all.png",

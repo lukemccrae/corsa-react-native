@@ -31,7 +31,8 @@
     "build:android:prod": "eas build --profile production --platform android --local",
     "fix-emulator-terminated": "rm -f ~/.var/app/com.google.AndroidStudio/config/Google/AndroidStudio2025.3.2/.lock",
     "codegen": "graphql-codegen --config codegen.yml",
-    "reset-server": "npx expo start --dev-client --tunnel -c"
+    "reset-server": "npx expo start --dev-client --tunnel -c",
+    "build-prod-local": "eas build --platform ios --profile production --local"
   },
   "dependencies": {
     "@expo-google-fonts/space-grotesk": "^0.4.0",

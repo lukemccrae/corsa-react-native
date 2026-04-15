@@ -8,7 +8,6 @@ import { Text } from "@/components/Text"
 import { TextField } from "@/components/TextField"
 import { useAuth } from "@/providers/AuthProvider"
 import { useAppTheme } from "@/theme/context"
-import { $styles } from "@/theme/styles"
 import type { ThemedStyle } from "@/theme/types"
 
 export const SignInScreen: FC = function SignInScreen() {
@@ -62,7 +61,12 @@ export const SignInScreen: FC = function SignInScreen() {
   }
 
   return (
-    <Screen preset="scroll" safeAreaEdges={["top", "bottom"]} contentContainerStyle={$styles.flex1}>
+    <Screen
+      preset="scroll"
+      safeAreaEdges={["top", "bottom"]}
+      contentContainerStyle={themed($screenContentContainer)}
+      KeyboardAvoidingViewProps={{ enabled: false }}
+    >
       <View style={themed($backRow)}>
         <Button text="← Back" preset="default" onPress={() => router.replace("/(app)/(tabs)")} style={themed($backButton)} />
       </View>
@@ -147,11 +151,14 @@ const $backButton: ThemedStyle<ViewStyle> = () => ({
 })
 
 const $container: ThemedStyle<ViewStyle> = ({ spacing }) => ({
-  flex: 1,
   paddingHorizontal: spacing.lg,
-  paddingTop: spacing.xxl,
+  paddingTop: spacing.xl,
   paddingBottom: spacing.lg,
-  justifyContent: "center",
+  justifyContent: "flex-start",
+})
+
+const $screenContentContainer: ThemedStyle<ViewStyle> = () => ({
+  flexGrow: 1,
 })
 
 const $heading: ThemedStyle<TextStyle> = ({ spacing }) => ({
