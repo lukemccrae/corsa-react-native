@@ -1,7 +1,6 @@
 import { forwardRef, useImperativeHandle, useMemo, useRef } from "react"
 import { Image, Pressable, StyleSheet, View } from "react-native"
 import MapLibreGL, { CameraRef, MapViewRef } from "@maplibre/maplibre-react-native"
-import type { FeatureCollection, LineString } from "geojson"
 
 // OpenTopoMap raster tile style equivalent of:
 // <TileLayer
@@ -123,24 +122,6 @@ export const MapLibreMap = forwardRef<MapLibreMapRef, MapLibreMapProps>(function
   const cameraRef = useRef<CameraRef>(null)
   const mapViewRef = useRef<MapViewRef>(null)
 
-  const trackShape = useMemo<FeatureCollection<LineString> | null>(() => {
-    if (trackCoordinates.length < 2) return null
-
-    return {
-      type: "FeatureCollection",
-      features: [
-        {
-          type: "Feature",
-          properties: {},
-          geometry: {
-            type: "LineString",
-            coordinates: trackCoordinates.map((coordinate) => [coordinate.longitude, coordinate.latitude]),
-          },
-        },
-      ],
-    }
-  }, [trackCoordinates])
-
   useImperativeHandle(
     ref,
     () => ({
@@ -197,12 +178,6 @@ export const MapLibreMap = forwardRef<MapLibreMapRef, MapLibreMapProps>(function
       {/* animated={false} avoids AnimatedPoint creation which crashes on RN 0.83
           due to AnimatedNode._listeners changing from plain object to Map. */}
       {showUserLocation && <MapLibreGL.UserLocation visible animated={false} />}
-
-      {trackShape ? (
-        <MapLibreGL.ShapeSource id="stream-track" shape={trackShape}>
-          <MapLibreGL.LineLayer id="stream-track-line" style={styles.trackLine} />
-        </MapLibreGL.ShapeSource>
-      ) : null}
 
       {waypointMarkers.map((marker) => (
         <MapLibreGL.MarkerView
@@ -289,13 +264,6 @@ export const MapLibreMap = forwardRef<MapLibreMapRef, MapLibreMapProps>(function
 const styles = StyleSheet.create({
   map: {
     flex: 1,
-  },
-  trackLine: {
-    lineColor: "#0f172a",
-    lineWidth: 4,
-    lineOpacity: 0.9,
-    lineCap: "round",
-    lineJoin: "round",
   },
   waypointCircle: {
     width: 14,

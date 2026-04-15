@@ -34,7 +34,19 @@ export interface TrackingConfig {
 
 export const TRACKING_TASK_NAME = "BACKGROUND_LOCATION_TASK"
 
+export const MIN_TRACKING_INTERVAL_MINUTES = 1
+export const MAX_TRACKING_INTERVAL_MINUTES = 60
+
 export const DEFAULT_INTERVAL_MINUTES = 5
+
+export function clampTrackingIntervalMinutes(intervalMinutes: number): number {
+  if (!Number.isFinite(intervalMinutes)) return DEFAULT_INTERVAL_MINUTES
+
+  return Math.min(
+    MAX_TRACKING_INTERVAL_MINUTES,
+    Math.max(MIN_TRACKING_INTERVAL_MINUTES, Math.round(intervalMinutes)),
+  )
+}
 
 export const DEFAULT_TRACKING_CONFIG: TrackingConfig = {
   intervalMinutes: DEFAULT_INTERVAL_MINUTES,

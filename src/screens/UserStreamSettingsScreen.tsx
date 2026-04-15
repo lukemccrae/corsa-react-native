@@ -168,8 +168,8 @@ export const UserStreamSettingsScreen: FC<UserStreamSettingsScreenProps> = funct
   )
 
   const handleCancel = useCallback(() => {
-    router.back()
-  }, [router])
+    router.replace(`/(app)/user/${username}/stream/${streamId}`)
+  }, [router, streamId, username])
 
   const handleSave = useCallback(async () => {
     if (!title.trim()) {

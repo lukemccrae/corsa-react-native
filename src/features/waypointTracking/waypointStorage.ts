@@ -9,6 +9,7 @@
  */
 import { getStorage } from "@/utils/storage"
 import type { TrackingConfig, Waypoint } from "./waypointTypes"
+import { clampTrackingIntervalMinutes } from "./waypointTypes"
 import { DEFAULT_TRACKING_CONFIG } from "./waypointTypes"
 
 const WAYPOINT_IDS_KEY = "waypoint_ids"
@@ -43,10 +44,11 @@ function normalizeTrackingConfig(config?: Partial<TrackingConfig> | null): Track
   return {
     ...DEFAULT_TRACKING_CONFIG,
     ...(config ?? {}),
-    intervalMinutes:
-      typeof config?.intervalMinutes === "number" && config.intervalMinutes > 0
+    intervalMinutes: clampTrackingIntervalMinutes(
+      typeof config?.intervalMinutes === "number"
         ? config.intervalMinutes
         : DEFAULT_TRACKING_CONFIG.intervalMinutes,
+    ),
   }
 }
 

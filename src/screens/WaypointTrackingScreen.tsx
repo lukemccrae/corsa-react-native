@@ -1,5 +1,5 @@
 import { FC, useCallback, useEffect, useState } from "react"
-import { Alert, ScrollView, TextStyle, View, ViewStyle } from "react-native"
+import { Alert, TextInput, TextStyle, View, ViewStyle } from "react-native"
 import { useRouter } from "expo-router"
 
 import { Button } from "@/components/Button"
@@ -23,10 +23,24 @@ import {
   saveTrackingConfig,
   setActiveStreamId,
 } from "@/features/waypointTracking/waypointStorage"
-import { DEFAULT_INTERVAL_MINUTES } from "@/features/waypointTracking/waypointTypes"
+import {
+  DEFAULT_INTERVAL_MINUTES,
+  MAX_TRACKING_INTERVAL_MINUTES,
+  MIN_TRACKING_INTERVAL_MINUTES,
+  clampTrackingIntervalMinutes,
+} from "@/features/waypointTracking/waypointTypes"
 import { getRandomValues } from "expo-crypto"
 
-const INTERVAL_OPTIONS = [1, 10, 30, 60]
+function parseTrackingIntervalInput(value: string): number | null {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+
+  const parsed = Number.parseInt(trimmed, 10)
+  if (!Number.isFinite(parsed)) return null
+  if (parsed < MIN_TRACKING_INTERVAL_MINUTES || parsed > MAX_TRACKING_INTERVAL_MINUTES) return null
+
+  return parsed
+}
 
 function confirmBackgroundLocationPrompt(): Promise<boolean> {
   return new Promise((resolve) => {
@@ -60,6 +74,8 @@ export const WaypointTrackingScreen: FC = function WaypointTrackingScreen() {
   const [tracking, setTracking] = useState(false)
   const [waypointCount, setWaypointCount] = useState(0)
   const [intervalMinutes, setIntervalMinutes] = useState(DEFAULT_INTERVAL_MINUTES)
+  const [intervalInput, setIntervalInput] = useState(String(DEFAULT_INTERVAL_MINUTES))
+  const [intervalError, setIntervalError] = useState<string | null>(null)
   const [permissionError, setPermissionError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -69,6 +85,8 @@ export const WaypointTrackingScreen: FC = function WaypointTrackingScreen() {
     setWaypointCount(getWaypointCount())
     const config = loadTrackingConfig()
     setIntervalMinutes(config.intervalMinutes)
+    setIntervalInput(String(config.intervalMinutes))
+    setIntervalError(null)
   }, [])
 
   useEffect(() => {
@@ -150,9 +168,25 @@ export const WaypointTrackingScreen: FC = function WaypointTrackingScreen() {
   }
 
   const handleIntervalChange = (minutes: number) => {
-    setIntervalMinutes(minutes)
-    saveTrackingConfig({ intervalMinutes: minutes })
+    const clamped = clampTrackingIntervalMinutes(minutes)
+    setIntervalMinutes(clamped)
+    setIntervalInput(String(clamped))
+    setIntervalError(null)
+    saveTrackingConfig({ intervalMinutes: clamped })
   }
+
+  const applyIntervalInput = useCallback(() => {
+    const parsed = parseTrackingIntervalInput(intervalInput)
+    if (parsed == null) {
+      setIntervalError(
+        `Enter a number from ${MIN_TRACKING_INTERVAL_MINUTES} to ${MAX_TRACKING_INTERVAL_MINUTES} minutes.`,
+      )
+      return false
+    }
+
+    handleIntervalChange(parsed)
+    return true
+  }, [intervalInput])
 
   return (
     <Screen preset="scroll" contentContainerStyle={themed($container)}>
@@ -212,26 +246,46 @@ export const WaypointTrackingScreen: FC = function WaypointTrackingScreen() {
       <View style={themed($section)}>
         <Text text="Tracking interval" preset="formLabel" style={themed($sectionLabel)} />
         <Text
-          text="How often to record a waypoint (minutes). Lower values use more battery."
+          text="Set how often to record a waypoint in minutes. Whole numbers only."
           size="xs"
           style={themed($subtleText)}
         />
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={themed($intervalRow)}
-        >
-          {INTERVAL_OPTIONS.map((opt) => (
-            <Button
-              key={opt}
-              text={opt === 60 ? "1 hour" : `${opt} min`}
-              preset={intervalMinutes === opt ? "filled" : "default"}
-              onPress={() => handleIntervalChange(opt)}
-              style={themed($intervalButton)}
-              disabled={tracking}
-            />
-          ))}
-        </ScrollView>
+        <View style={themed($customIntervalRow)}>
+          <Text text="Minutes" size="xs" weight="medium" style={themed($customIntervalLabel)} />
+          <TextInput
+            style={themed($customIntervalInput)}
+            value={intervalInput}
+            onChangeText={(value) => {
+              const digitsOnly = value.replace(/[^0-9]/g, "")
+              setIntervalInput(digitsOnly)
+              setIntervalError(null)
+            }}
+            onBlur={() => {
+              void applyIntervalInput()
+            }}
+            keyboardType="number-pad"
+            returnKeyType="done"
+            maxLength={2}
+            placeholder="1 to 60"
+            placeholderTextColor="#64748b"
+            editable={!tracking}
+            accessibilityLabel="Tracking interval in minutes, whole numbers only"
+          />
+          <Button
+            text="Apply"
+            preset="default"
+            onPress={() => {
+              void applyIntervalInput()
+            }}
+            disabled={tracking}
+            style={themed($customIntervalApplyButton)}
+          />
+        </View>
+        {intervalError ? (
+          <Text text={intervalError} size="xs" style={themed($errorText)} />
+        ) : (
+          <Text text={`Custom interval: ${intervalMinutes} minute(s)`} size="xs" style={themed($subtleText)} />
+        )}
         {tracking ? (
           <Text
             text="Stop tracking to change the interval."
@@ -329,11 +383,27 @@ const $controlButton: ThemedStyle<ViewStyle> = () => ({
   minHeight: 44,
 })
 
-const $intervalRow: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+const $customIntervalRow: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  flexDirection: "column",
+  alignItems: "stretch",
   gap: spacing.xs,
-  paddingVertical: spacing.xxs,
 })
 
-const $intervalButton: ThemedStyle<ViewStyle> = () => ({
+const $customIntervalLabel: ThemedStyle<TextStyle> = ({ colors }) => ({
+  color: colors.text,
+})
+
+const $customIntervalInput: ThemedStyle<TextStyle> = ({ colors, spacing }) => ({
+  flex: 1,
+  minHeight: 44,
+  borderWidth: 1,
+  borderRadius: 10,
+  borderColor: colors.palette.neutral300,
+  color: colors.text,
+  backgroundColor: colors.background,
+  paddingHorizontal: spacing.sm,
+})
+
+const $customIntervalApplyButton: ThemedStyle<ViewStyle> = () => ({
   minHeight: 44,
 })

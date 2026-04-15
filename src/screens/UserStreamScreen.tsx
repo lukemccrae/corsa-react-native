@@ -53,6 +53,11 @@ import type {
   TrackingSyncMode,
 } from "@/features/waypointTracking/waypointTypes"
 import {
+  MAX_TRACKING_INTERVAL_MINUTES,
+  MIN_TRACKING_INTERVAL_MINUTES,
+  clampTrackingIntervalMinutes,
+} from "@/features/waypointTracking/waypointTypes"
+import {
   clearActiveStreamId,
   getAllWaypoints,
   getActiveStreamId,
@@ -62,10 +67,20 @@ import {
   setActiveStreamId,
 } from "@/features/waypointTracking/waypointStorage"
 
-const INTERVAL_OPTIONS = [1, 10, 30, 60]
 const CAPTURE_MODE_OPTIONS: TrackingCaptureMode[] = ["auto", "manual"]
 const SYNC_MODE_OPTIONS: TrackingSyncMode[] = ["manual", "auto"]
 const POWER_MODE_OPTIONS: TrackingPowerMode[] = ["balanced", "battery_saver"]
+
+function parseTrackingIntervalInput(value: string): number | null {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+
+  const parsed = Number.parseInt(trimmed, 10)
+  if (!Number.isFinite(parsed)) return null
+  if (parsed < MIN_TRACKING_INTERVAL_MINUTES || parsed > MAX_TRACKING_INTERVAL_MINUTES) return null
+
+  return parsed
+}
 
 function confirmBackgroundLocationPrompt(): Promise<boolean> {
   return new Promise((resolve) => {
@@ -550,6 +565,8 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
   const [powerMode, setPowerMode] = useState<TrackingPowerMode>(initialTrackingConfig.powerMode)
   const [recordingSettingsVisible, setRecordingSettingsVisible] = useState(false)
   const [draftIntervalMinutes, setDraftIntervalMinutes] = useState(initialTrackingConfig.intervalMinutes)
+  const [draftIntervalInput, setDraftIntervalInput] = useState(String(initialTrackingConfig.intervalMinutes))
+  const [draftIntervalError, setDraftIntervalError] = useState<string | null>(null)
   const [draftCaptureMode, setDraftCaptureMode] = useState<TrackingCaptureMode>(initialTrackingConfig.captureMode)
   const [draftSyncMode, setDraftSyncMode] = useState<TrackingSyncMode>(initialTrackingConfig.syncMode)
   const [draftPowerMode, setDraftPowerMode] = useState<TrackingPowerMode>(initialTrackingConfig.powerMode)
@@ -645,7 +662,7 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
     setTrackingBusy(true)
     setTrackingError(null)
 
-    const selectedIntervalMinutes = settings?.intervalMinutes ?? intervalMinutes
+    const selectedIntervalMinutes = clampTrackingIntervalMinutes(settings?.intervalMinutes ?? intervalMinutes)
     const selectedCaptureMode = settings?.captureMode ?? captureMode
     const selectedPowerMode = settings?.powerMode ?? powerMode
 
@@ -936,7 +953,7 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
   const waypointMarkers = useMemo<StreamWaypointMarker[]>(
     () =>
       mapWaypoints.map((waypoint, index) => ({
-        id: `${waypoint.streamId}-${waypoint.pointIndex ?? index}`,
+        id: `${waypoint.streamId}-${String(waypoint.timestamp)}-${waypoint.pointIndex ?? index}`,
         latitude: waypoint.lat,
         longitude: waypoint.lng,
         recordedAt:
@@ -1088,7 +1105,7 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
 
   const applyTrackingConfig = useCallback(
     (next: Partial<{ intervalMinutes: number; captureMode: TrackingCaptureMode; syncMode: TrackingSyncMode; powerMode: TrackingPowerMode }>) => {
-      const nextInterval = next.intervalMinutes ?? intervalMinutes
+      const nextInterval = clampTrackingIntervalMinutes(next.intervalMinutes ?? intervalMinutes)
       const nextCaptureMode = next.captureMode ?? captureMode
       const nextSyncMode = next.syncMode ?? syncMode
       const nextPowerMode = next.powerMode ?? powerMode
@@ -1110,6 +1127,8 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
 
   const openRecordingSettings = useCallback(() => {
     setDraftIntervalMinutes(intervalMinutes)
+    setDraftIntervalInput(String(intervalMinutes))
+    setDraftIntervalError(null)
     setDraftCaptureMode(captureMode)
     setDraftSyncMode(syncMode)
     setDraftPowerMode(powerMode)
@@ -1118,13 +1137,33 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
 
   const closeRecordingSettings = useCallback(() => {
     setDraftIntervalMinutes(intervalMinutes)
+    setDraftIntervalInput(String(intervalMinutes))
+    setDraftIntervalError(null)
     setDraftCaptureMode(captureMode)
     setDraftSyncMode(syncMode)
     setDraftPowerMode(powerMode)
     setRecordingSettingsVisible(false)
   }, [captureMode, intervalMinutes, powerMode, syncMode])
 
+  const applyDraftIntervalInput = useCallback((): boolean => {
+    const parsed = parseTrackingIntervalInput(draftIntervalInput)
+    if (parsed == null) {
+      setDraftIntervalError(
+        `Enter a number from ${MIN_TRACKING_INTERVAL_MINUTES} to ${MAX_TRACKING_INTERVAL_MINUTES} minutes.`,
+      )
+      return false
+    }
+
+    const clamped = clampTrackingIntervalMinutes(parsed)
+    setDraftIntervalMinutes(clamped)
+    setDraftIntervalInput(String(clamped))
+    setDraftIntervalError(null)
+    return true
+  }, [draftIntervalInput])
+
   const saveRecordingSettings = useCallback(() => {
+    if (!applyDraftIntervalInput()) return false
+
     applyTrackingConfig({
       intervalMinutes: draftIntervalMinutes,
       captureMode: draftCaptureMode,
@@ -1132,7 +1171,15 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
       powerMode: draftPowerMode,
     })
     setRecordingSettingsVisible(false)
-  }, [applyTrackingConfig, draftCaptureMode, draftIntervalMinutes, draftPowerMode, draftSyncMode])
+    return true
+  }, [
+    applyDraftIntervalInput,
+    applyTrackingConfig,
+    draftCaptureMode,
+    draftIntervalMinutes,
+    draftPowerMode,
+    draftSyncMode,
+  ])
 
   return (
     <Screen preset="scroll" contentContainerStyle={themed($screenContainer)}>
@@ -1626,7 +1673,9 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
                         }
                         preset="filled"
                         onPress={() => {
-                          saveRecordingSettings()
+                          const didSave = saveRecordingSettings()
+                          if (!didSave) return
+
                           void handleStartTracking({
                             intervalMinutes: draftIntervalMinutes,
                             captureMode: draftCaptureMode,
@@ -1680,36 +1729,50 @@ export const UserStreamScreen: FC<UserStreamScreenProps> = function UserStreamSc
                   <View style={themed($settingsSection)}>
                     <Text text="Recording interval" size="xs" weight="medium" style={themed($settingsLabel)} />
                     <Text
-                      text="Shorter intervals capture more detail but drain the battery faster."
+                      text="Set how often to record in minutes. Whole numbers only."
                       size="xs"
                       style={themed($subtleText)}
                     />
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={$intervalRow}
-                    >
-                      {INTERVAL_OPTIONS.map((opt) => {
-                        const isSelected = draftIntervalMinutes === opt
-                        const baseLabel = opt === 60 ? "1 hour" : `${opt} min`
-
-                        return (
-                          <Button
-                            key={opt}
-                            text={baseLabel}
-                            accessibilityState={{ selected: isSelected }}
-                            preset={isSelected ? "filled" : "default"}
-                            onPress={() => setDraftIntervalMinutes(opt)}
-                            style={[
-                              $intervalButton,
-                              isSelected && themed($optionButtonSelected),
-                            ]}
-                            textStyle={isSelected ? themed($optionButtonTextSelected) : undefined}
-                            disabled={tracking && activeTrackingStreamId === streamId}
-                          />
-                        )
-                      })}
-                    </ScrollView>
+                    <View style={themed($customIntervalRow)}>
+                      <Text text="Minutes" size="xs" weight="medium" style={themed($settingsLabel)} />
+                      <TextInput
+                        style={themed($customIntervalInput)}
+                        value={draftIntervalInput}
+                        onChangeText={(value) => {
+                          const digitsOnly = value.replace(/[^0-9]/g, "")
+                          setDraftIntervalInput(digitsOnly)
+                          setDraftIntervalError(null)
+                        }}
+                        onBlur={() => {
+                          void applyDraftIntervalInput()
+                        }}
+                        keyboardType="number-pad"
+                        returnKeyType="done"
+                        maxLength={2}
+                        placeholder="1 to 60"
+                        placeholderTextColor="#64748b"
+                        editable={!(tracking && activeTrackingStreamId === streamId)}
+                        accessibilityLabel="Recording interval in minutes, whole numbers only"
+                      />
+                      <Button
+                        text="Apply"
+                        preset="default"
+                        onPress={() => {
+                          void applyDraftIntervalInput()
+                        }}
+                        disabled={tracking && activeTrackingStreamId === streamId}
+                        style={$customIntervalApplyButton}
+                      />
+                    </View>
+                    {draftIntervalError ? (
+                      <Text text={draftIntervalError} size="xs" style={themed($errorText)} />
+                    ) : (
+                      <Text
+                        text={`Custom interval: ${draftIntervalMinutes} minute(s)`}
+                        size="xs"
+                        style={themed($subtleText)}
+                      />
+                    )}
                     {tracking && activeTrackingStreamId === streamId ? (
                       <Text
                         text="Stop recording to change the interval."
@@ -2101,12 +2164,24 @@ const $settingsLabel: ThemedStyle<TextStyle> = ({ colors }) => ({
   color: colors.text,
 })
 
-const $intervalRow: ViewStyle = {
-  gap: 8,
-  paddingVertical: 2,
-}
+const $customIntervalRow: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  flexDirection: "column",
+  alignItems: "stretch",
+  gap: spacing.xs,
+})
 
-const $intervalButton: ViewStyle = {
+const $customIntervalInput: ThemedStyle<TextStyle> = ({ colors, spacing }) => ({
+  flex: 1,
+  minHeight: 44,
+  borderWidth: 1,
+  borderRadius: 10,
+  borderColor: colors.palette.neutral300,
+  color: colors.text,
+  backgroundColor: colors.background,
+  paddingHorizontal: spacing.sm,
+})
+
+const $customIntervalApplyButton: ViewStyle = {
   minHeight: 44,
 }
 

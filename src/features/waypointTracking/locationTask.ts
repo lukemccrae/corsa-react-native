@@ -13,6 +13,7 @@ import * as TaskManager from "expo-task-manager"
 
 import { appendWaypoint } from "./waypointStorage"
 import { getActiveStreamId } from "./waypointStorage"
+import { clampTrackingIntervalMinutes } from "./waypointTypes"
 import type { Waypoint } from "./waypointTypes"
 import type { TrackingPowerMode } from "./waypointTypes"
 import { TRACKING_TASK_NAME } from "./waypointTypes"
@@ -161,8 +162,9 @@ export async function startLocationTracking(
 ): Promise<void> {
   await ensureTaskManagerAvailable()
 
-  const msInterval = intervalMinutes * 60 * 1000
-  const iosDistanceIntervalM = getIosDistanceIntervalM(intervalMinutes, powerMode)
+  const safeIntervalMinutes = clampTrackingIntervalMinutes(intervalMinutes)
+  const msInterval = safeIntervalMinutes * 60 * 1000
+  const iosDistanceIntervalM = getIosDistanceIntervalM(safeIntervalMinutes, powerMode)
 
   const options: Location.LocationTaskOptions = {
     accuracy: getAccuracy(powerMode),

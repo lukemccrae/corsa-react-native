@@ -169,4 +169,17 @@ describe("UserStreamSettingsScreen", () => {
 
     expect(mockReplace).toHaveBeenCalledWith("/(app)/user/johndoe/stream/stream-1")
   })
+
+  it("navigates back to stream when pressing Cancel", async () => {
+    const { getByText } = render(
+      <UserStreamSettingsScreen username="johndoe" streamId="stream-1" />,
+    )
+
+    await act(async () => {})
+    await waitFor(() => expect(getByText("Cancel")).toBeTruthy())
+
+    fireEvent.press(getByText("Cancel"))
+
+    expect(mockReplace).toHaveBeenCalledWith("/(app)/user/johndoe/stream/stream-1")
+  })
 })
