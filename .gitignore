@@ -94,3 +94,6 @@ app-dependency-graph.png
 .env
 .env.local
 package-lock.json
+.expo/
+.certs/*
+credentials.json

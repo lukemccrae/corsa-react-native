@@ -30,6 +30,15 @@ EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=your_google_web_client_id.apps.googleuserconten
 # Optional – improves the native sign-in experience on EAS / bare builds:
 EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=your_google_ios_client_id.apps.googleusercontent.com
 EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=your_google_android_client_id.apps.googleusercontent.com
+EXPO_PUBLIC_CLOUDFRONT_PHOTO_URL=https://your-cloudfront-distribution.cloudfront.net
+EXPO_PUBLIC_GEOJSON_CDN_BASE_URL=https://your-geojson-cloudfront-distribution.cloudfront.net
+
+# AppSync (runtime GraphQL fetches from the mobile app)
+EXPO_PUBLIC_APPSYNC_API_KEY=your_appsync_api_key
+EXPO_PUBLIC_APPSYNC_ENDPOINT=https://<your-api-id>.appsync-api.<region>.amazonaws.com/graphql
+
+# Native waypoint ingestion REST endpoint
+EXPO_PUBLIC_NATIVE_WAYPOINT_ENDPOINT=https://your-api.example.com/native-waypoint
 ```
 
 These are read at build time via `app.config.ts` and exposed through `expo-constants`. You can find the Firebase values in your [Firebase console](https://console.firebase.google.com/) under **Project Settings → Your apps → SDK setup and configuration**.
@@ -37,6 +46,10 @@ These are read at build time via `app.config.ts` and exposed through `expo-const
 > **Note**: Enable **Email/Password** and **Google** sign-in in the Firebase console under **Authentication → Sign-in method**. For Google sign-in, the **Web client ID** is listed on that same page once Google is enabled.
 
 > **Expo Go vs native builds**: Google sign-in via `expo-auth-session` works in Expo Go using the web OAuth flow (only `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` is required). For EAS / bare workflow builds, supply the iOS and Android client IDs as well so the native Google SDK is used instead.
+
+## GraphQL Code Generator
+
+Run `yarn codegen` to regenerate TypeScript types from the AppSync GraphQL schema. See [docs/codegen.md](docs/codegen.md) for setup instructions.
 
 ## MapLibre Map Setup
 

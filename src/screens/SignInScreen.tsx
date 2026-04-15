@@ -1,5 +1,6 @@
 import { FC, useState } from "react"
 import { ActivityIndicator, TextStyle, View, ViewStyle } from "react-native"
+import { useRouter } from "expo-router"
 
 import { Button } from "@/components/Button"
 import { Screen } from "@/components/Screen"
@@ -12,6 +13,7 @@ import type { ThemedStyle } from "@/theme/types"
 
 export const SignInScreen: FC = function SignInScreen() {
   const { themed } = useAppTheme()
+  const router = useRouter()
   const { signIn, signUp, signInWithGoogle } = useAuth()
 
   const [email, setEmail] = useState("")
@@ -51,7 +53,8 @@ export const SignInScreen: FC = function SignInScreen() {
     setLoading(true)
     try {
       await signInWithGoogle()
-    } catch {
+    } catch (err) {
+      console.error("Google sign-in error:", err)
       setError("signInScreen:errorGeneric")
     } finally {
       setLoading(false)
@@ -60,6 +63,9 @@ export const SignInScreen: FC = function SignInScreen() {
 
   return (
     <Screen preset="scroll" safeAreaEdges={["top", "bottom"]} contentContainerStyle={$styles.flex1}>
+      <View style={themed($backRow)}>
+        <Button text="← Back" preset="default" onPress={() => router.replace("/(app)/(tabs)")} style={themed($backButton)} />
+      </View>
       <View style={themed($container)}>
         <Text tx="signInScreen:title" preset="heading" style={themed($heading)} />
 
@@ -128,6 +134,17 @@ export const SignInScreen: FC = function SignInScreen() {
     </Screen>
   )
 }
+
+const $backRow: ThemedStyle<ViewStyle> = ({ spacing }) => ({
+  paddingHorizontal: spacing.lg,
+  paddingTop: spacing.md,
+})
+
+const $backButton: ThemedStyle<ViewStyle> = () => ({
+  alignSelf: "flex-start",
+  minHeight: 36,
+  paddingVertical: 4,
+})
 
 const $container: ThemedStyle<ViewStyle> = ({ spacing }) => ({
   flex: 1,

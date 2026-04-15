@@ -1,6 +1,19 @@
 import { MMKV } from "react-native-mmkv"
 
-export const storage = new MMKV()
+// Lazy singleton – the MMKV constructor is NOT called when this module is
+// imported.  Eager initialisation (new MMKV() at module scope) can trigger
+// ObjCTurboModule native calls before the JS bridge is fully initialised,
+// causing a SIGABRT crash on TestFlight.
+let _storage: MMKV | null = null
+
+/**
+ * Returns the shared MMKV storage instance, creating it on first call.
+ * Use this instead of importing `storage` directly.
+ */
+export function getStorage(): MMKV {
+  if (!_storage) _storage = new MMKV()
+  return _storage
+}
 
 /**
  * Loads a string from storage.
@@ -9,7 +22,7 @@ export const storage = new MMKV()
  */
 export function loadString(key: string): string | null {
   try {
-    return storage.getString(key) ?? null
+    return getStorage().getString(key) ?? null
   } catch {
     // not sure why this would fail... even reading the RN docs I'm unclear
     return null
@@ -24,7 +37,7 @@ export function loadString(key: string): string | null {
  */
 export function saveString(key: string, value: string): boolean {
   try {
-    storage.set(key, value)
+    getStorage().set(key, value)
     return true
   } catch {
     return false
@@ -68,7 +81,7 @@ export function save(key: string, value: unknown): boolean {
  */
 export function remove(key: string): void {
   try {
-    storage.delete(key)
+    getStorage().delete(key)
   } catch {}
 }
 
@@ -77,6 +90,6 @@ export function remove(key: string): void {
  */
 export function clear(): void {
   try {
-    storage.clearAll()
+    getStorage().clearAll()
   } catch {}
 }

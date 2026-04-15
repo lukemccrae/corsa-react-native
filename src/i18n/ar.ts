@@ -49,6 +49,12 @@ const ar: Translations = {
     retry: "Retry",
     locationError: "Could not get your location. Please try again.",
   },
+  userProfileScreen: {
+    title: "الملف الشخصي",
+    bio: "السيرة الذاتية",
+    noBio: "لا توجد سيرة ذاتية بعد.",
+    viewProfile: "عرض الملف الشخصي لـ {{username}}",
+  },
 }
 
 export default ar

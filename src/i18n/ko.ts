@@ -49,6 +49,12 @@ const ko: Translations = {
     retry: "Retry",
     locationError: "Could not get your location. Please try again.",
   },
+  userProfileScreen: {
+    title: "프로필",
+    bio: "소개",
+    noBio: "아직 소개가 없습니다.",
+    viewProfile: "{{username}}의 프로필 보기",
+  },
 }
 
 export default ko

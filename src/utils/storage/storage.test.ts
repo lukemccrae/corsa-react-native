@@ -1,21 +1,21 @@
-import { load, loadString, save, saveString, clear, remove, storage } from "."
+import { load, loadString, save, saveString, clear, remove, getStorage } from "."
 
 const VALUE_OBJECT = { x: 1 }
 const VALUE_STRING = JSON.stringify(VALUE_OBJECT)
 
 describe("MMKV Storage", () => {
   beforeEach(() => {
-    storage.clearAll()
-    storage.set("string", "string")
-    storage.set("object", JSON.stringify(VALUE_OBJECT))
+    getStorage().clearAll()
+    getStorage().set("string", "string")
+    getStorage().set("object", JSON.stringify(VALUE_OBJECT))
   })
 
   it("should be defined", () => {
-    expect(storage).toBeDefined()
+    expect(getStorage()).toBeDefined()
   })
 
   it("should have default keys", () => {
-    expect(storage.getAllKeys()).toEqual(["string", "object"])
+    expect(getStorage().getAllKeys()).toEqual(["string", "object"])
   })
 
   it("should load data", () => {
@@ -46,16 +46,16 @@ describe("MMKV Storage", () => {
   it("should remove data", () => {
     remove("object")
     expect(load<object>("object")).toBeNull()
-    expect(storage.getAllKeys()).toEqual(["string"])
+    expect(getStorage().getAllKeys()).toEqual(["string"])
 
     remove("string")
     expect(load<string>("string")).toBeNull()
-    expect(storage.getAllKeys()).toEqual([])
+    expect(getStorage().getAllKeys()).toEqual([])
   })
 
   it("should clear all data", () => {
-    expect(storage.getAllKeys()).toEqual(["string", "object"])
+    expect(getStorage().getAllKeys()).toEqual(["string", "object"])
     clear()
-    expect(storage.getAllKeys()).toEqual([])
+    expect(getStorage().getAllKeys()).toEqual([])
   })
 })

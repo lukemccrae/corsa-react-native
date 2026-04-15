@@ -50,6 +50,12 @@ const ja: Translations = {
     retry: "Retry",
     locationError: "Could not get your location. Please try again.",
   },
+  userProfileScreen: {
+    title: "プロフィール",
+    bio: "自己紹介",
+    noBio: "まだ自己紹介がありません。",
+    viewProfile: "{{username}}のプロフィールを見る",
+  },
 }
 
 export default ja

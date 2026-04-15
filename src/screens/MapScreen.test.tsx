@@ -1,7 +1,13 @@
-import { act, render } from "@testing-library/react-native"
+import { act, fireEvent, render } from "@testing-library/react-native"
 import * as Location from "expo-location"
 
 import { MapScreen } from "./MapScreen"
+
+const mockFetchPublicStreamsByEntity = jest.fn()
+
+jest.mock("@/services/api/graphql", () => ({
+  fetchPublicStreamsByEntity: () => mockFetchPublicStreamsByEntity(),
+}))
 
 jest.mock("expo-location", () => ({
   PermissionStatus: {
@@ -14,17 +20,29 @@ jest.mock("expo-location", () => ({
   getCurrentPositionAsync: jest.fn(),
 }))
 
+const mockPush = jest.fn()
 jest.mock("expo-router", () => ({
-  useRouter: () => ({ push: jest.fn() }),
+  useRouter: () => ({ push: mockPush }),
 }))
 
+const mockUseAuth = jest.fn()
 jest.mock("@/providers/AuthProvider", () => ({
-  useAuth: () => ({ user: null, signOut: jest.fn() }),
+  useAuth: () => mockUseAuth(),
 }))
 
-jest.mock("@/components/Map/MapLibreMap", () => ({
-  MapLibreMap: jest.fn(() => null),
-}))
+jest.mock("@/components/Map/MapLibreMap", () => {
+  const React = require("react")
+  return {
+    MapLibreMap: React.forwardRef((_props: object, ref: React.Ref<object>) => {
+      React.useImperativeHandle(ref, () => ({
+        flyTo: jest.fn(),
+        zoomIn: jest.fn().mockResolvedValue(undefined),
+        zoomOut: jest.fn().mockResolvedValue(undefined),
+      }))
+      return null
+    }),
+  }
+})
 
 jest.mock("@/theme/context", () => ({
   useAppTheme: jest.fn().mockReturnValue({
@@ -35,9 +53,11 @@ jest.mock("@/theme/context", () => ({
 describe("MapScreen", () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    mockUseAuth.mockReturnValue({ user: null, appUser: null, signOut: jest.fn() })
+    mockFetchPublicStreamsByEntity.mockResolvedValue([])
   })
 
-  it("shows location error toast when getCurrentPositionAsync throws during initial permission request", async () => {
+  it("does not fetch current location during initial permission request", async () => {
     ;(Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({
       status: "granted",
     })
@@ -45,10 +65,11 @@ describe("MapScreen", () => {
       new Error("Current location is unavailable. Make sure that location services are enabled"),
     )
 
-    const { findByText } = render(<MapScreen />)
+    const { queryByText } = render(<MapScreen />)
+    await act(async () => {})
 
-    // Error toast should appear after the rejected location request
-    await findByText("mapScreen:locationError")
+    expect(Location.getCurrentPositionAsync).not.toHaveBeenCalled()
+    expect(queryByText("mapScreen:locationError")).toBeNull()
   })
 
   it("does not show location error toast when location is successfully obtained", async () => {
@@ -73,5 +94,53 @@ describe("MapScreen", () => {
     const { findByText } = render(<MapScreen />)
 
     await findByText("mapScreen:locationPermissionDenied")
+  })
+
+  it("renders profile badge with username when user and appUser are present", async () => {
+    mockUseAuth.mockReturnValue({
+      user: { uid: "user123" },
+      appUser: { username: "testuser", profilePicture: "" },
+      signOut: jest.fn(),
+    })
+    ;(Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({
+      status: "undetermined",
+    })
+
+    const { findByText } = render(<MapScreen />)
+    await findByText("testuser")
+  })
+
+  it("navigates to user profile when profile badge is pressed", async () => {
+    mockUseAuth.mockReturnValue({
+      user: { uid: "user123" },
+      appUser: { username: "testuser", profilePicture: "" },
+      signOut: jest.fn(),
+    })
+    ;(Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({
+      status: "undetermined",
+    })
+
+    const { getByLabelText } = render(<MapScreen />)
+    await act(async () => {})
+
+    const badge = getByLabelText("userProfileScreen:viewProfile")
+    fireEvent.press(badge)
+
+    expect(mockPush).toHaveBeenCalledWith("/(app)/user/testuser")
+  })
+
+  it("navigates to sign-in when logged-out profile slot button is pressed", async () => {
+    mockUseAuth.mockReturnValue({ user: null, appUser: null, signOut: jest.fn() })
+    ;(Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({
+      status: "undetermined",
+    })
+
+    const { getByLabelText } = render(<MapScreen />)
+    await act(async () => {})
+
+    const signInButton = getByLabelText("mapScreen:signIn")
+    fireEvent.press(signInButton)
+
+    expect(mockPush).toHaveBeenCalledWith("/(auth)/sign-in")
   })
 })
