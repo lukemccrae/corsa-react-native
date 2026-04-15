@@ -104,6 +104,18 @@ module.exports = ({ config }: ConfigContext): Partial<ExpoConfig> => {
       firebaseAppId:
         process.env.EXPO_PUBLIC_FIREBASE_APP_ID ??
         (existingExtra.firebaseAppId as string | undefined),
+      appSyncEndpoint:
+        process.env.EXPO_PUBLIC_APPSYNC_ENDPOINT ??
+        (existingExtra.appSyncEndpoint as string | undefined),
+      appSyncApiKey:
+        process.env.EXPO_PUBLIC_APPSYNC_API_KEY ??
+        (existingExtra.appSyncApiKey as string | undefined),
+      cloudFrontPhotoUrl:
+        process.env.EXPO_PUBLIC_CLOUDFRONT_PHOTO_URL ??
+        (existingExtra.cloudFrontPhotoUrl as string | undefined),
+      geoJsonCdnBaseUrl:
+        process.env.EXPO_PUBLIC_GEOJSON_CDN_BASE_URL ??
+        (existingExtra.geoJsonCdnBaseUrl as string | undefined),
       googleWebClientId,
       googleIosClientId: iosClientId || undefined,
       googleAndroidClientId,

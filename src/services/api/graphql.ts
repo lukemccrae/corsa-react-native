@@ -13,6 +13,7 @@ import type {
   Sponsor,
   User,
 } from "@/generated/schema"
+import Constants from "expo-constants"
 
 type GraphQLError = {
   message: string
@@ -93,15 +94,28 @@ type GetUserStreamChatPageResponse = {
   errors?: GraphQLError[]
 }
 
+const expoConfigExtra = Constants.expoConfig?.extra ?? {}
+
 const appSyncEndpoint =
-  process.env.EXPO_PUBLIC_APPSYNC_ENDPOINT ?? process.env.APPSYNC_ENDPOINT ?? ""
+  (expoConfigExtra.appSyncEndpoint as string | undefined) ??
+  process.env.EXPO_PUBLIC_APPSYNC_ENDPOINT ??
+  process.env.APPSYNC_ENDPOINT ??
+  ""
 
 const appSyncApiKey =
-  process.env.EXPO_PUBLIC_APPSYNC_API_KEY ?? process.env.APPSYNC_API_KEY ?? ""
+  (expoConfigExtra.appSyncApiKey as string | undefined) ??
+  process.env.EXPO_PUBLIC_APPSYNC_API_KEY ??
+  process.env.APPSYNC_API_KEY ??
+  ""
 
-const cloudFrontPhotoUrl = process.env.EXPO_PUBLIC_CLOUDFRONT_PHOTO_URL ?? ""
+const cloudFrontPhotoUrl =
+  (expoConfigExtra.cloudFrontPhotoUrl as string | undefined) ??
+  process.env.EXPO_PUBLIC_CLOUDFRONT_PHOTO_URL ??
+  ""
 const geoJsonCdnBaseUrl =
-  process.env.EXPO_PUBLIC_GEOJSON_CDN_BASE_URL ?? "https://d2mg2mxj6r88wt.cloudfront.net"
+  (expoConfigExtra.geoJsonCdnBaseUrl as string | undefined) ??
+  process.env.EXPO_PUBLIC_GEOJSON_CDN_BASE_URL ??
+  "https://d2mg2mxj6r88wt.cloudfront.net"
 
 const nativeWaypointEndpoint = resolveNativeWaypointEndpoint()
 
