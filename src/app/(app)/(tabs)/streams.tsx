@@ -13,12 +13,13 @@ import {
   Switch,
 } from "react-native"
 import { useRouter } from "expo-router"
+import { getRandomValues } from "expo-crypto"
 
 import { Screen } from "@/components/Screen"
 import { Text } from "@/components/Text"
 import { Button } from "@/components/Button"
 import { useAuth } from "@/providers/AuthProvider"
-import { fetchUserProfileByUsername } from "@/services/api/graphql"
+import { fetchUserProfileByUsername, upsertLiveStream } from "@/services/api/graphql"
 import { useAppTheme } from "@/theme/context"
 import type { ThemedStyle } from "@/theme/types"
 import type { LiveStream, Device } from "@/generated/schema"
@@ -29,6 +30,32 @@ interface CreateStreamForm {
   startNow: boolean
   live: boolean
   published: boolean
+}
+
+function generateUUID(): string {
+  const bytes = new Uint8Array(16)
+  getRandomValues(bytes)
+  bytes[6] = (bytes[6] & 0x0f) | 0x40
+  bytes[8] = (bytes[8] & 0x3f) | 0x80
+  const hex = Array.from(bytes)
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("")
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+}
+
+function getDeviceLocation(device?: Device) {
+  if (device?.lastLocation) {
+    return {
+      lat: device.lastLocation.lat,
+      lng: device.lastLocation.lng,
+    }
+  }
+
+  return { lat: 0, lng: 0 }
+}
+
+function getLocalTimezone() {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
 }
 
 export const StreamsScreen: FC = function StreamsScreen() {
@@ -126,13 +153,44 @@ export const StreamsScreen: FC = function StreamsScreen() {
       return
     }
 
+    if (!user || !appUser) {
+      router.push("/(auth)/sign-in")
+      return
+    }
+
     setSubmitting(true)
+    setErrors({})
     try {
-      // TODO: Call API to create stream with formData
-      // On success, navigate to the stream page or refresh list
+      const streamId = generateUUID()
+      const idToken = await user.getIdToken()
+      const selectedDevice = devices.find((device) => device.deviceId === formData.selectedDeviceId)
+      const result = await upsertLiveStream(
+        {
+          streamId,
+          userId: appUser.userId,
+          username: appUser.username,
+          title: formData.title.trim(),
+          startTime: new Date().toISOString(),
+          live: formData.live,
+          published: formData.published,
+          deviceId: formData.selectedDeviceId ?? undefined,
+          timezone: getLocalTimezone(),
+          currentLocation: getDeviceLocation(selectedDevice),
+        },
+        idToken,
+      )
+
+      if (!result.success) {
+        throw new Error(result.message ?? "Failed to create stream")
+      }
+
       setShowCreateForm(false)
       resetForm()
       await loadStreams()
+      router.push({
+        pathname: "/user/[username]/stream/[streamId]",
+        params: { username: appUser.username, streamId },
+      })
     } catch (error) {
       console.error("Error creating stream:", error)
       setErrors({ title: "Failed to create stream. Please try again." })
@@ -299,7 +357,10 @@ export const StreamsScreen: FC = function StreamsScreen() {
                 const username = item.publicUser?.username ?? appUser?.username
                 if (!username) return
 
-                router.push(`/(app)/user/${username}/stream/${item.streamId}`)
+                router.push({
+                  pathname: "/user/[username]/stream/[streamId]",
+                  params: { username, streamId: item.streamId },
+                })
               }}
               style={themed($streamItem)}
             >
