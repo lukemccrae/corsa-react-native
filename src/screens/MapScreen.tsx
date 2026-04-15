@@ -546,8 +546,8 @@ const $discoverTextCol: ThemedStyle<ViewStyle> = () => ({
 
 const $discoverUsername: ThemedStyle<TextStyle> = () => ({
   color: "#f8fafc",
-  fontSize: 28,
-  lineHeight: 32,
+  fontSize: 14,
+  lineHeight: 18,
 })
 
 const $discoverSubtitle: ThemedStyle<TextStyle> = () => ({
